@@ -34,8 +34,10 @@ def run(path_eve, server_alias, filter_string, language, path_json, group=None):
     trans = Translator(pickle_miner=pickle_miner)
     fsdlite_miner = FsdLiteMiner(resbrowser=resource_browser, translator=trans)
     fsdbuilt_miner = FsdBuiltMiner(resbrowser=resource_browser, translator=trans)
+    fsdbin_miner = FsdBinaryMiner(resbrowser=resource_browser, translator=trans)
     miners = [
         MetadataMiner(resbrowser=resource_browser),
+        fsdbin_miner,
         fsdlite_miner,
         fsdbuilt_miner,
         TraitMiner(fsdlite_miner=fsdlite_miner, fsdbuilt_miner=fsdbuilt_miner, translator=trans),

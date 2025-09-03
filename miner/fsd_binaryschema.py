@@ -23,7 +23,7 @@ import sqlite3
 import zipimport
 import sys
 import importlib.util
-
+from collections import OrderedDict
 from miner.base import BaseMiner
 from util import EveNormalizer, cachedproperty
 
@@ -41,7 +41,7 @@ class FsdBinaryMiner(BaseMiner):
         for container_name in sorted(self._contname_respath_map):
             yield container_name
 
-    def get_data(self, container_name, language=None, verbose=False, **kwargs):
+    def fsd_parser(self, fsd_file_path):
         codeccp = self._resbrowser.get_file_info('app:/code.ccp').file_abspath
         sys.path.insert(0, codeccp)
         import fsd
@@ -51,80 +51,92 @@ class FsdBinaryMiner(BaseMiner):
         #import fsd.schemas.loaders.dictLoader as DictLoader
         import fsd.schemas.loaders.listLoader as listLoader
         import fsd.schemas.loaders.objectLoader as objectLoader
+        import fsd.schemas.loaders as miscLoaders
+
+        schema = None
+        pre_fsd_data = binLoader.LoadFSDDataInPython(fsd_file_path, schema, False, None)
+
+        fsd_list = []
+        fsd_list2 = []
+        fsd_tuple = {}
+
+        try:
+            #print(type(pre_fsd_data))
+            if type(pre_fsd_data) == dictLoader.DictLoader:
+                for item in pre_fsd_data:
+                    fsd_list.append(str(pre_fsd_data[item]))
+                #fsd_list.append((mini_fsd_parser(list(pre_fsd_data[item]))))
+            elif type(pre_fsd_data) == listLoader:
+                for item in pre_fsd_data:
+                    fsd_tuple.append(str(pre_fsd_data[item]))
+                #fsd_list.append(str(mini_fsd_parser(pre_fsd_data[item])))
+            elif type(pre_fsd_data) == objectLoader:
+                for item in pre_fsd_data:
+                    fsd_tuple.append(str(pre_fsd_data[item]))
+                #fsd_list.append(str(mini_fsd_parser(pre_fsd_data[item])))
+            elif type(pre_fsd_data) == dictLoader.IndexLoader:
+                fsd_tuple2 = list(pre_fsd_data.items())
+                for item in fsd_tuple2:
+                    fsd_list.append(str(item[1]))
+            elif type(pre_fsd_data) == dictLoader.MultiIndexLoader:
+                fsd_tuple2 = list(pre_fsd_data.items())
+                for item in fsd_tuple2:
+                    fsd_list.append(str(item[1]))
+                    for subitem2 in item[1].__dir__():
+                        try:
+                            reinput = item[1].__getitem__(subitem2)  
+                            if reinput == "None" or reinput == None or reinput == []:
+                                continue
+                            else:
+                                #TODO: Add better documentation as to what the F### this section does
+                                if type(reinput) == dictLoader.DictLoader:
+                                    try:
+                                        for item in reinput:
+                                            fsd_list.append(str(reinput[item]))
+                                    except:
+                                        continue
+                                elif type(reinput) == miscLoaders.VectorLoader:
+                                    try:
+                                        fsd_list.append("OUTEROBJ:"+str(item[1])+":"+str(item[1].__getitem__(subitem2))+":LAYER1:"+str(subitem2)+":INNEROBJ:"+str(reinput)+":VECTOR_SCHEMA:"+str(reinput.schema)+":DATA:"+str((reinput.data)))
+                                    except:
+                                        continue
+                                elif type(reinput) == objectLoader:
+                                    for item in reinput:
+                                        fsd_list.append(str(reinput[item]))
+                            #except:
+                            #return None
+
+                        except:
+                        #print("skipping variable " + subitem2)
+                            continue
+
+            else: #This should never trigger, and IndexLoader/MultiIndexLoader will error out the main loop anyway, so the data gets pushed to an alternate path
+                fsd_list.append(str(pre_fsd_data))
+        except:
+            print("????!")
+        finally:
+            try:
+                return fsd_list
+            except:
+                return None
+
+
+
+        
+    def get_data(self, container_name, language=None, verbose=False, **kwargs):
         try:
             resource_path = self._contname_respath_map[container_name]
         except KeyError:
             self._container_not_found(container_name)
         else:
             file_path = self._resbrowser.get_file_info(resource_path).file_abspath
-            #code_file = self._resbrowser.get_file_info('app:/code.ccp').file_abspath
-            # code_file = re.match(r'app:/code.ccp$', resource_path, flags=re.UNICODE)
-            #print (resource_path)
-            try:
-                schema_test = re.match(r'^res:/staticdata/(?P<fname>.+).schema$', resource_path)
-                print(resource_path)
-                #pre_fsd_data = binLoader.LoadFSDDataInPython(None, None, None, None)
-                schema = self._resbrowser.get_file_info(schema_test).file_abspath
-            except:
-                schema = None
-            finally:
-                pre_fsd_data = binLoader.LoadFSDDataInPython(file_path, schema, False, None)
-                fsd_list = []
-                fsd_tuple = {}
-                #fsd_data.update(keys)
-                
-                #if type(pre_fsd_data) == dictLoader.DictLoader:
-                #keys = 
-                #values = pre_fsd_data.values()
-                #print(list(keys))
-                #print(list(fsd_data))
-                #normalized_data = EveNormalizer().run(fsd_data, loader_module=None)
-                
-                #for key in fsd_data:
-                    #fsd_data[key] = pre_fsd_data.Get(key)
-               
-                print(type(pre_fsd_data))
-                if type(pre_fsd_data) == dictLoader.DictLoader:
-                    for item in pre_fsd_data:
-                        #print(pre_fsd_data[item])
-                        fsd_list.append(str(pre_fsd_data[item]))
-                    return fsd_list
-                elif type(pre_fsd_data) == dictLoader.IndexLoader:
-                    fsd_tuple2 = list(pre_fsd_data.items())
-                    #print
-                    for item in fsd_tuple2:
-                        #print(item[1])
-                        fsd_list.append(str(item[1]))
-                        #if type(item)
-                    #self.cleanup_pass_values(fsd_data)
-                    return fsd_list
-                elif type(pre_fsd_data) == dictLoader.MultiIndexLoader:
-                    fsd_tuple2 = list(pre_fsd_data.items())
-                    #print
-                    for item in fsd_tuple2:
-                        #print(item[1])
-                        fsd_list.append(str(item[1]))
-                        #if type(item)
-                    #self.cleanup_pass_values(fsd_data)
-                    return fsd_list
-                elif type(pre_fsd_data) == listLoader:
-                    for item in pre_fsd_data:
-                        #print(pre_fsd_data[item])
-                        fsd_tuple.append(str(pre_fsd_data[item]))
-                    return fsd_tuple
-                elif type(pre_fsd_data) == objectLoader:
-                    for item in pre_fsd_data:
-                        #print(pre_fsd_data[item])
-                        fsd_tuple.append(str(pre_fsd_data[item]))
-                    return fsd_tuple
-                else:
-                    print("wtf")
-                    return None
-                    #schema = binLoader.LoadFSDDataInPython(file_path, self._resbrowser.get_file_info(schema_test).file_abspath)
-            #print(fsd_data)
+            fsd_list = self.fsd_parser(file_path)
+            return fsd_list
             
-            #self._translator.translate_container(fsd_bin, language, verbose=verbose)
+                
+    #def check_type(self, object):
         
+
     @cachedproperty
     def _contname_respath_map(self):
         """

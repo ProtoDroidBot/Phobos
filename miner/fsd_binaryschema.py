@@ -1,3 +1,4 @@
+
 #===============================================================================
 # Copyright (C) 2014-2019 Anton Vorobyov
 #
@@ -53,6 +54,47 @@ class FsdBinaryMiner(BaseMiner):
         import fsd.schemas.loaders.objectLoader as objectLoader
         import fsd.schemas.loaders as miscLoaders
 
+        def dictstuff(raw_fsd):
+            for item in raw_fsd:
+                #print(raw_fsd[item])
+                #print(item)
+
+                #fsd_list.append(str(raw_fsd[item]))
+                #rint(result[39:])
+                try:
+                    result = raw_fsd[item].__dir__()
+                    for item2 in result[39:]:
+                        #print(item2)
+                        #print(str(getattr(raw_fsd[item], item2)))
+                        item3 = (raw_fsd[item].__getitem__(item2))
+                        fsd_list.append(str(raw_fsd[item]) + ";ATTRIBUTE;" + str(item2) + ";VALUE;" + str(item3))
+                        if type(item3) == dictLoader.DictLoader:
+                            dictstuff(item3)
+                        if type(item3) == miscLoaders.VectorLoader:
+                            vectorstuff((item3))
+                except:
+                    fsd_list.append(str(item))
+                            
+                    
+                        
+        def vectorstuff(raw_fsd):
+            try:
+                fsd_list.append("OUTEROBJ;"+str(item[1])+";"+str(item[1].__getitem__(subitem2))+";LAYER1;"+str(subitem2)+";INNEROBJ;"+str(reinput)+";VECTOR_SCHEMA;"+str(reinput.schema)+";DATA;"+str((reinput.data)))
+            except:
+                pass
+        def objstuff(raw_fsd):
+            fsd_list.append(str(raw_fsd))
+            #print(raw_fsd.__dir__())
+            result = raw_fsd.__dir__()
+            for item2 in result[39:]:
+                item3 = (raw_fsd.__getitem__(item2))
+                print(item3)
+                if type(item3) == dictLoader.DictLoader:
+                    dictstuff(item3)
+                    
+        def attrstuff(raw_fsd):
+            print("?")
+
         schema = None
         pre_fsd_data = binLoader.LoadFSDDataInPython(fsd_file_path, schema, False, None)
 
@@ -60,66 +102,49 @@ class FsdBinaryMiner(BaseMiner):
         fsd_list2 = []
         fsd_tuple = {}
 
-        try:
-            #print(type(pre_fsd_data))
-            if type(pre_fsd_data) == dictLoader.DictLoader:
-                for item in pre_fsd_data:
-                    fsd_list.append(str(pre_fsd_data[item]))
-                #fsd_list.append((mini_fsd_parser(list(pre_fsd_data[item]))))
-            elif type(pre_fsd_data) == listLoader:
-                for item in pre_fsd_data:
-                    fsd_tuple.append(str(pre_fsd_data[item]))
-                #fsd_list.append(str(mini_fsd_parser(pre_fsd_data[item])))
-            elif type(pre_fsd_data) == objectLoader:
-                for item in pre_fsd_data:
-                    fsd_tuple.append(str(pre_fsd_data[item]))
-                #fsd_list.append(str(mini_fsd_parser(pre_fsd_data[item])))
-            elif type(pre_fsd_data) == dictLoader.IndexLoader:
-                fsd_tuple2 = list(pre_fsd_data.items())
-                for item in fsd_tuple2:
-                    fsd_list.append(str(item[1]))
-            elif type(pre_fsd_data) == dictLoader.MultiIndexLoader:
-                fsd_tuple2 = list(pre_fsd_data.items())
-                for item in fsd_tuple2:
-                    fsd_list.append(str(item[1]))
-                    for subitem2 in item[1].__dir__():
-                        try:
-                            reinput = item[1].__getitem__(subitem2)  
-                            if reinput == "None" or reinput == None or reinput == []:
-                                continue
-                            else:
-                                #TODO: Add better documentation as to what the F### this section does
-                                if type(reinput) == dictLoader.DictLoader:
-                                    try:
-                                        for item in reinput:
-                                            fsd_list.append(str(reinput[item]))
-                                    except:
-                                        continue
-                                elif type(reinput) == miscLoaders.VectorLoader:
-                                    try:
-                                        fsd_list.append("OUTEROBJ:"+str(item[1])+":"+str(item[1].__getitem__(subitem2))+":LAYER1:"+str(subitem2)+":INNEROBJ:"+str(reinput)+":VECTOR_SCHEMA:"+str(reinput.schema)+":DATA:"+str((reinput.data)))
-                                    except:
-                                        continue
-                                elif type(reinput) == objectLoader:
-                                    for item in reinput:
-                                        fsd_list.append(str(reinput[item]))
-                            #except:
-                            #return None
-
-                        except:
-                        #print("skipping variable " + subitem2)
+        #print(type(pre_fsd_data))
+        if type(pre_fsd_data) == dictLoader.DictLoader:
+            dictstuff(pre_fsd_data)
+        elif type(pre_fsd_data) == listLoader:
+            for item in pre_fsd_data:
+                fsd_tuple.append(str(pre_fsd_data[item]))
+            #fsd_list.append(str(mini_fsd_parser(pre_fsd_data[item])))
+        elif type(pre_fsd_data) == objectLoader.ObjectLoader:
+            objstuff(pre_fsd_data)
+            #fsd_list.append(str(mini_fsd_parser(pre_fsd_data[item])))
+        elif type(pre_fsd_data) == dictLoader.IndexLoader:
+            fsd_tuple2 = list(pre_fsd_data.items())
+            for item in fsd_tuple2:
+                fsd_list.append(str(item[1]))
+        elif type(pre_fsd_data) == dictLoader.MultiIndexLoader:
+            fsd_tuple2 = list(pre_fsd_data.items())
+            for item in fsd_tuple2:
+                fsd_list.append(str(item[1]))
+                for subitem2 in item[1].__dir__():
+                    try:
+                        reinput = item[1].__getitem__(subitem2)  
+                        if reinput == "None" or reinput == None or reinput == []:
                             continue
+                        else:
+                            #TODO: Add better documentation as to what the F### this section does
+                            if type(reinput) == dictLoader.DictLoader:
+                                dictstuff(reinput)
+                            elif type(reinput) == miscLoaders.VectorLoader:
+                                vectorstuff(reinput)
+                            elif type(reinput) == objectLoader:
+                                for item in reinput:
+                                    fsd_list.append(str(reinput[item]))
+                        #except:
+                        #return None
 
-            else: #This should never trigger, and IndexLoader/MultiIndexLoader will error out the main loop anyway, so the data gets pushed to an alternate path
-                fsd_list.append(str(pre_fsd_data))
-        except:
-            print("????!")
-        finally:
-            try:
-                return fsd_list
-            except:
-                return None
+                    except:
+                    #print("skipping variable " + subitem2)
+                        continue
 
+        else: #This should never trigger, and IndexLoader/MultiIndexLoader will error out the main loop anyway, so the data gets pushed to an alternate path
+            fsd_list.append(str(pre_fsd_data))
+        return fsd_list
+           
 
 
         

@@ -24,7 +24,8 @@ import sqlite3
 import zipimport
 import sys
 import importlib.util
-from collections import OrderedDict
+#from collections import OrderedDict
+import json
 from miner.base import BaseMiner
 from util import EveNormalizer, cachedproperty
 
@@ -54,13 +55,13 @@ class FsdBinaryMiner(BaseMiner):
         import fsd.schemas.loaders.objectLoader as objectLoader
         import fsd.schemas.loaders as miscLoaders
                     
-        #fsd_list3 = []
+
 
         def vectorstuff(raw_fsd):
             #print(raw_fsd)
             #print(raw_fsd.data)
             #print(raw_fsd.schema)
-            fsd_list.append("VECTOR; Above linked Entry; " + str(raw_fsd.data) + "; " + str(raw_fsd.schema))
+            #fsd_list.append("VECTOR; Above linked Entry; " + str(raw_fsd.data) + "; " + str(raw_fsd.schema))
             for item1 in raw_fsd.__dir__():
                 #result = raw_fsd
                 #print(result)
@@ -68,119 +69,145 @@ class FsdBinaryMiner(BaseMiner):
                     continue
                 else:
                     #print("VECTOR; Above linked Entry; " + str(raw_fsd.data) + "; " + str(raw_fsd.schema))
-                    fsd_list.append("VECTOR; Above linked Entry; " + str(raw_fsd.data) + "; " + str(raw_fsd.schema))
+                    return("Vector: " + str(raw_fsd.data) + "Schema: " + str(raw_fsd.schema))
   
 
-        def dictstuff(raw_fsd,layer):
-            #print(type(raw_fsd))
-            for item1 in raw_fsd:
-                #print(item1)
-                #print(type(item1))
-
-                if type(item1) == int:
-                    #print(("#")*layer + str(raw_fsd) + "; " + str(item1) + "; " + str(raw_fsd))
-                    fsd_list.append(("#")*layer + str(raw_fsd) + "; " + str(item1) + "; " + str(raw_fsd))
-                    for item2s in raw_fsd[item1].__dir__():
-                        if item2s.startswith("__"):
+        def dictstuff(raw_fsd):
+            test2 = []
+            #print(original)
+            #print(raw_fsd)
+            try:
+                for item in raw_fsd.__schema__['attributes']:
+                    #print(item)
+                    test2.append(str(raw_fsd[item]))
+                    #print(pre_fsd_data[item].__dir__())
+                    for item2 in raw_fsd[item].__dir__():
+                        if item2.startswith("__"):
                             continue
                         else:
-                            #print(item2s)
-                            item3 = (raw_fsd[item1].__getitem__(item2s))
-                            fsd_list.append(str(raw_fsd[item1]) + "; ATTRIBUTE; " + str(item2s) + "; VALUE; " + str(item3))
-                            if type(item3) == dictLoader.DictLoader:
-                                dictstuff(item3,layer+1)
-                            if type(item3) == miscLoaders.VectorLoader:
-                                #print(item3)
-                                vectest = vectorstuff(item3)
-                                fsd_list.append(str(vectest))
-                    continue
-                if item1.startswith("__"):
-                    continue
-
+                            test = getattr(raw_fsd[item],item2)
+                            #print(test)
+                            #fsd_list.append(str(dictstuff(getattr(raw_fsd,item))))
+                    test2.append(test)
+            except:
+                if type(raw_fsd) == objectLoader.ObjectLoader:
+                    for item in raw_fsd.__schema__['attributes'].items():
+                        test2.append(item)
+                        
+                        #test2.append(objstuff(raw_fsd.__getitem__(item)))
                 else:
-                    #print(item1)
-                    for item2 in raw_fsd:
-                        result = raw_fsd.__getitem__(item1) 
-                        #print(result)
-                        #print(str(getattr(raw_fsd[item], item2)))
-                        item3 = (raw_fsd[item1].__getitem__(item2))
-                        #print(item3)
-                        fsd_list.append(str(raw_fsd[item1]) + "; ATTRIBUTE; " + str(item2) + "; VALUE; " + str(item3))
-                        if type(item3) == dictLoader.DictLoader:
-                            dictstuff(item3,layer+1)
-                        if type(item3) == miscLoaders.VectorLoader:
-                            #print(item3)
-                            vectorstuff(item3)
-                        #return item3
+                    for item in raw_fsd:
+                        test2.append(str(raw_fsd[item]))
+                        #print(pre_fsd_data[item].__dir__())
+                        for item2 in raw_fsd[item].__dir__():
+                            if item2.startswith("__"):
+                                continue
+                            else:
+                                test = getattr(raw_fsd[item],item2)
+                                #print(test)
+                                #fsd_list.append(str(dictstuff(getattr(raw_fsd,item))))
+                        test2.append(test)
+            return test2
                             
 
         def objstuff(raw_fsd):
-            if type(raw_fsd) == dictLoader.DictLoader:
-                dictstuff(raw_fsd,1)
-            if type(raw_fsd) == miscLoaders.VectorLoader:
-                vectorstuff(raw_fsd)
-            try:
-                for item in raw_fsd.__dir__():
-                    if item.startswith("__"):
-                        continue
-                    else:
-                        #print(raw_fsd)
-                            #print(item1)
-                        result = raw_fsd.__getitem__(item) 
-                        #print(result)
-                            #print(item2)
-                        if type(result) == dictLoader.DictLoader:
-                            #print(type(result))
-                            dictstuff(result,1)
-                        if type(result) == miscLoaders.VectorLoader:
-                            vectorstuff(result)
+            testing1 = raw_fsd.__schema__['attributes']
+            main = []
+            for item1 in testing1:
+                nuked = raw_fsd.__getattr__(item1)
+                if type(nuked) == dictLoader.DictLoader:
+                    print(nuked)
+                    test1 = dictstuff(nuked)
+                    main.append(test1)
+                elif type(nuked) == miscLoaders.VectorLoader:
+                    test1 = vectorstuff(nuked)
+                    main.append(test1)
+                else:
+                    testing2 = (nuked.__schema__['attributes'])
+                    for item2 in testing2:
+                        item3 = (nuked.__getattr__(item2))
+                        if type(item3) == dictLoader.DictLoader:
+                            main.append(dictstuff(item3))
+                            #return item4
+                        if type(item2) == miscLoaders.VectorLoader:
+                            #item4 = vectorstuff(item3)
+                            main.append(vectorstuff(item3))
+                            #return item4  
+                            #return result
                         else:
-                            fsd_list.append(str(result))
+                            #print(raw_fsd.__getattr__(item))
+                            main.append(item3)
+                            #print(raw_fsd.Get[item])
+                        #return main
+                            #fsd_list.append(str(result))
+                        #main = item
+            #print(main)
+            return(main)
 
-            except:
-                #fsd_list.append(str(raw_fsd))
-                pass
 
         schema = None
         pre_fsd_data = binLoader.LoadFSDDataInPython(fsd_file_path, schema, False, None)
 
         fsd_list = []
-        fsd_list2 = []
+        test = ""
         fsd_tuple = {}
-
-        #print(type(pre_fsd_data))
+        print(type(pre_fsd_data))
         if type(pre_fsd_data) == dictLoader.DictLoader:
-            dictstuff(pre_fsd_data,1)
+            for item in pre_fsd_data:
+                #fsd_list = pre_fsd_data[item]
+                #print(pre_fsd_data[item])
+                fsd_list.append(str(pre_fsd_data[item]))
+                #print(pre_fsd_data[item].__dir__())
+                if type(pre_fsd_data[item]) == objectLoader.ObjectLoader:
+                    test = dictstuff(pre_fsd_data[item])
+                    fsd_list.append(test)
+            #print(fsd_list)
+            return fsd_list
         elif type(pre_fsd_data) == listLoader:
             for item in pre_fsd_data:
-                fsd_tuple.append(str(pre_fsd_data[item]))
-            #fsd_list.append(str(mini_fsd_parser(pre_fsd_data[item])))
+                #fsd_list = pre_fsd_data[item]
+                #print(pre_fsd_data[item])
+                fsd_list.append(str(pre_fsd_data[item]))
+                #print(pre_fsd_data[item].__dir__())
+                if type(pre_fsd_data[item]) == objectLoader.ObjectLoader:
+                    test = objstuff(pre_fsd_data[item])
+                    fsd_list.append(test)
+            #print(fsd_list)
+            return fsd_list
         elif type(pre_fsd_data) == objectLoader.ObjectLoader:
-            objstuff(pre_fsd_data)
-            #fsd_list.append(str(mini_fsd_parser(pre_fsd_data[item])))
+            #print(pre_fsd_data)
+            
+            fsd_list.append(objstuff(pre_fsd_data))
+            return fsd_list
         elif type(pre_fsd_data) == dictLoader.IndexLoader:
-            fsd_tuple2 = list(pre_fsd_data.items())
-            for item in fsd_tuple2:
-                fsd_list.append(str(item[1]))
-        elif type(pre_fsd_data) == dictLoader.MultiIndexLoader:
-            pre_fsd_data2 = pre_fsd_data.items()
-            for item in pre_fsd_data2:
-                #fsd_list.append(str(item[1]))
+            #print(list(pre_fsd_data.items()))
+            for item in list(pre_fsd_data.items()):
                 #print(item)
-                #result = item
-                #print(type(item))
                 fsd_list.append(str(item))
-                for subitem3 in item:
-                    fsd_list.append(str(subitem3))
-                    objstuff(subitem3)
+            #fsd_list = json.dumps((test),indent=1)
+            return fsd_list
+        elif type(pre_fsd_data) == dictLoader.MultiIndexLoader:
+            #pre_fsd_data2 = pre_fsd_data.items()
+            fsd_tuple = list(pre_fsd_data.items())
+            #print(fsd_list)
+            for item in fsd_tuple:
+                #fsd_list.append(str(objstuff(item)))
+                #print(item[1])
+                fsd_list.append(str(dictstuff(item[1])))
+            return fsd_list
+            #fsd_list = str(pre_fsd_data.items())
+            #fsd_list.append(str(item[1]))
+            #print(getattr(pre_fsd_data, item))
+            #result = item
+            #print(type(item))
 
-                    #except:
-                    #return None
+                #except:
+                #return None
 
 
         else: #This should never trigger, and IndexLoader/MultiIndexLoader will error out the main loop anyway, so the data gets pushed to an alternate path
-            fsd_list.append(str(pre_fsd_data))
-        return fsd_list
+            #test = json.dumps((pre_fsd_data),indent=1)
+            return fsd_list
            
 
 
@@ -193,7 +220,8 @@ class FsdBinaryMiner(BaseMiner):
         else:
             file_path = self._resbrowser.get_file_info(resource_path).file_abspath
             fsd_list = self.fsd_parser(file_path)
-            return fsd_list
+            #print(str(fsd_list))
+            return str(fsd_list)
             
                 
     #def check_type(self, object):

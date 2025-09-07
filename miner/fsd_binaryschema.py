@@ -26,6 +26,7 @@ import sys
 import importlib.util
 #from collections import OrderedDict
 import json
+
 from miner.base import BaseMiner
 from util import EveNormalizer, cachedproperty
 
@@ -54,155 +55,503 @@ class FsdBinaryMiner(BaseMiner):
         import fsd.schemas.loaders.listLoader as listLoader
         import fsd.schemas.loaders.objectLoader as objectLoader
         import fsd.schemas.loaders as miscLoaders
-                    
 
-
-        def vectorstuff(raw_fsd):
+        def vectorstuff(raw_fsd, returnval):
             #print(raw_fsd)
             #print(raw_fsd.data)
             #print(raw_fsd.schema)
+            test1 = []
             #fsd_list.append("VECTOR; Above linked Entry; " + str(raw_fsd.data) + "; " + str(raw_fsd.schema))
-            for item1 in raw_fsd.__dir__():
-                #result = raw_fsd
-                #print(result)
-                if item1.startswith("__"):
-                    continue
-                else:
-                    #print("VECTOR; Above linked Entry; " + str(raw_fsd.data) + "; " + str(raw_fsd.schema))
-                    return("Vector: " + str(raw_fsd.data) + "Schema: " + str(raw_fsd.schema))
+
+            #print("VECTOR; Above linked Entry; " + str(raw_fsd.data) + "; " + str(raw_fsd.schema))
+            #return("Vector: " + str(raw_fsd.data) + "Schema: " + str(raw_fsd.schema))
+            test1.append({"vector_schema": (raw_fsd.schema)})
+            test1.append({"vector_data": (raw_fsd.data)})
+
+            returnval = test1
+            return returnval
   
 
-        def dictstuff(raw_fsd):
-            test2 = []
+        def dictstuff(raw_fsd, returnval):
+            test3 = []
+            ret2 = "??"
             #print(original)
             #print(raw_fsd)
             try:
+                #print("a")
                 for item in raw_fsd.__schema__['attributes']:
                     #print(item)
-                    test2.append(str(raw_fsd[item]))
-                    #print(pre_fsd_data[item].__dir__())
-                    for item2 in raw_fsd[item].__dir__():
-                        if item2.startswith("__"):
-                            continue
+                    #test2.update(json.loads(json.dumps(dict(raw_fsd[item]))))
+                    #print(test2)
+                    if item.startswith("__"):
+                        continue
+                    else:
+                        #print((raw_fsd[item]))
+
+                        if type(raw_fsd[item]) == miscLoaders.VectorLoader:
+                            test3.append({str(item):  vectorstuff(raw_fsd[item], ret2)}) 
+                        elif type(raw_fsd[item]) == dictLoader.DictLoader:
+                            test3.append({str(item): (dictstuff(raw_fsd[item], ret2))})
+                            
+                        elif type(raw_fsd[item]) == objectLoader.ObjectLoader:
+                            test3.append({str(item): (raw_fsd[item], ret2)}) 
+                            #test3.append({str(item): (raw_fsd[item])})
                         else:
-                            test = getattr(raw_fsd[item],item2)
-                            #print(test)
-                            #fsd_list.append(str(dictstuff(getattr(raw_fsd,item))))
-                    test2.append(test)
+                            test3.append({str(item): raw_fsd[item]})
+                returnval = test3
+                return returnval
             except:
+                #print(type(raw_fsd))
                 if type(raw_fsd) == objectLoader.ObjectLoader:
-                    for item in raw_fsd.__schema__['attributes'].items():
-                        test2.append(item)
-                        
-                        #test2.append(objstuff(raw_fsd.__getitem__(item)))
-                else:
-                    for item in raw_fsd:
-                        test2.append(str(raw_fsd[item]))
-                        #print(pre_fsd_data[item].__dir__())
-                        for item2 in raw_fsd[item].__dir__():
+                    #print(type(raw_fsd))
+                    for item in raw_fsd.__schema__['attributes']:
+                        for item2 in raw_fsd.__schema__['attributes'][item]:
                             if item2.startswith("__"):
                                 continue
                             else:
-                                test = getattr(raw_fsd[item],item2)
-                                #print(test)
-                                #fsd_list.append(str(dictstuff(getattr(raw_fsd,item))))
-                        test2.append(test)
-            return test2
-                            
+                                #print(raw_fsd[item][item2])
+                                test3.append({str(item): str(item2), str(item2): (item2)})
 
-        def objstuff(raw_fsd):
-            testing1 = raw_fsd.__schema__['attributes']
-            main = []
-            for item1 in testing1:
-                nuked = raw_fsd.__getattr__(item1)
-                if type(nuked) == dictLoader.DictLoader:
-                    print(nuked)
-                    test1 = dictstuff(nuked)
-                    main.append(test1)
-                elif type(nuked) == miscLoaders.VectorLoader:
-                    test1 = vectorstuff(nuked)
-                    main.append(test1)
+                elif type(raw_fsd) == dictLoader.DictLoader:
+                    #print("b")
+                    #print(raw_fsd.__dir__())
+                    try:
+                        for item in raw_fsd.__schema__['attributes']:
+                            for item2 in raw_fsd.__schema__['attributes'][item]:
+                                if item2.startswith("__"):
+                                    continue
+                                else:
+                                    #print(item2)
+                                    test3.append({str(item): str(item2), str(item2): (raw_fsd[item][item2])})
+                        returnval = test3
+                        return returnval
+                    except:
+                        #print("c")
+                        #test3.append(raw_fsd)
+                        #print(raw_fsd)
+                        for item in raw_fsd.items():
+                            #test3.append({str((raw_fsd)): str(item)})
+                            #print(">>")
+                            #print(item)
+                            for item2 in item:
+                                #print(type(item2))
+                                if type(item2) == dictLoader.DictLoader:
+                                    test3.append({str(item): str(item2), str(item2): (dictstuff(item2, ret2))})
+                                elif type(item2) == objectLoader.ObjectLoader:
+                                    test3.append({str(item): str(item2), str(item2): (objstuff(item2, ret2))})
+                                else:
+                                    #print("?")
+                                    test3.append({str(item): str(item2), str(item2): (item2)})
+                        #print(test3)
+                    returnval = test3
+                    return returnval
                 else:
-                    testing2 = (nuked.__schema__['attributes'])
-                    for item2 in testing2:
-                        item3 = (nuked.__getattr__(item2))
-                        if type(item3) == dictLoader.DictLoader:
-                            main.append(dictstuff(item3))
-                            #return item4
-                        if type(item2) == miscLoaders.VectorLoader:
-                            #item4 = vectorstuff(item3)
-                            main.append(vectorstuff(item3))
-                            #return item4  
-                            #return result
+                    try:
+                        for item in raw_fsd:
+                            #print(item)
+                            try:
+                                for item2 in raw_fsd[item].__dir__():
+                                    if item2.startswith("__"):
+                                        continue
+                                    elif type(raw_fsd[item][item2]) == miscLoaders.VectorLoader:
+                                        #print("?")
+                                        test3.append({str(item): str(item2), str(item2): (vectorstuff(raw_fsd[item][item2], ret2))})
+                                    elif type(raw_fsd[item][item2]) == dictLoader.DictLoader:
+                                        #print("????1")
+                                        test3.append({str(item): str(item2), str(item2): (dictstuff(raw_fsd[item][item2],ret2))})
+                                    elif type(raw_fsd[item][item2]) == objectLoader.ObjectLoader:
+                                        #print("????2")
+                                        test3.append({str(item): str(item2), str(item2): (objstuff(raw_fsd[item][item2], ret2))})
+                                    else:
+                                        #print("????3")
+                                        test3.append({str(item): str(item2), str(item2): (raw_fsd[item][item2])})
+                                returnval = test3
+                                return returnval
+                            except:
+                                #print(item)
+                                for item2 in raw_fsd[item].__dir__():
+                                    if item2.startswith("__"):
+                                        continue
+                                    #print(type(item2))
+                                    #print(item2.values)
+                                    #print(item2)
+                                    #test3.append({str(item): (raw_fsd[item])})
+                                    if type(item2) == miscLoaders.VectorLoader:
+                                        #print("?1")
+                                        test3.append({str(item): self.vectorstuff(item2)})
+                                    elif type(item2) == dictLoader.DictLoader:
+                                        #print("????2")
+                                        test3.append({str(item): (dictstuff(item2, ret2))})
+                                    elif type(item2) == objectLoader.ObjectLoader:
+                                        #print("?1")
+                                        test3.append({str(item): (objstuff(item2, ret2))})
+                                    else:
+                                        test3.append({str(item), str(item2)})
+                                #test2 = test2 + test3
+                                #print(test3)
+                                returnval = test3
+                                return returnval
+                    except:
+                        #print("?3")
+                        returnval = test3
+            return returnval
+        
+        def objstuff(raw_fsd, returnval):
+            #testing1 = raw_fsd
+            ret2 = "??"
+            main = []
+            if type(raw_fsd) == str or type(raw_fsd) == int or type(raw_fsd) == bool:
+                #print(raw_fsd)
+                return raw_fsd
+            elif raw_fsd == None:
+                raw_fsd = "None"
+                return raw_fsd
+            elif type(raw_fsd) == objectLoader.ObjectLoader:
+                #print(type(raw_fsd))
+                main2 = []
+                for item2 in raw_fsd.__dir__():
+                    #print(item2)
+                    try:
+                       
+                        if item2.startswith("__"):
+                            continue
+                        #print(type(raw_fsd[item2]))
+                        if type(raw_fsd[item2]) == dictLoader.DictLoader:
+                            main2.append(({str(item2): dictstuff(raw_fsd[item2], ret2)}))
+                            #return(main)
+                        elif type(raw_fsd[item2]) == miscLoaders.VectorLoader:
+                            #print("?5")
+                            main2.append(({str(item2): vectorstuff(raw_fsd[item2], ret2)}))
+                        elif type(raw_fsd[item2]) == objectLoader.ObjectLoader:
+                            #print((raw_fsd[item2]))
+                            main2.append(({str(item2): objstuff(raw_fsd[item2], ret2)}))
                         else:
-                            #print(raw_fsd.__getattr__(item))
-                            main.append(item3)
-                            #print(raw_fsd.Get[item])
-                        #return main
-                            #fsd_list.append(str(result))
-                        #main = item
-            #print(main)
-            return(main)
+                            #print(raw_fsd[item2])
+                            main2.append(({str(item2): str(raw_fsd[item2])}))
+                            #main2.append({"innertype": str(item2), "innerobj": raw_fsd[item2]})
+                            #print (main)
 
+                        #main2.append({str(item2), str(raw_fsd[item2])})
+                    except:
+                        pass
+                #print(main2)
+                returnval = main2
+                return returnval
+                #print(main2)
+            else:
+                #print(type(raw_fsd))
+                try:
+                    #print(testing1.schema)
+                    for item1 in raw_fsd.schema:
+                        #print("?")
+                        if type(item1) == str or type(item1) == int or type(item1) == bool:
+                            #print(item1)
+                            return item1
+                        #print(item1)
+                        testing2 = (item1.schema['attributes'])
+                        for item2 in testing2:
+                            item3 = (getattr(item1, item2))
+                            #print(" ! " + item3)
+                            #main = ()
+                            if type(item3) == dictLoader.DictLoader:
+                                #print("??")
+                                main.append((dictstuff(item3, ret2)))
+                                #return item4
+                            if type(item2) == miscLoaders.VectorLoader:
+                                #item4 = vectorstuff(item3)
+                                #print("?4")
+                                main.append((vectorstuff(item3, ret2)))
+                                #return item4  
+                                #return result
+                            else:
+                                #print(raw_fsd.__getattr__(item))
+                                #print("???")
+                                main.append({str(item2), (item3)})
+                                #print(raw_fsd.Get[item])
+                            #return main
+                                #fsd_list.append(str(result))
+                    #print(main)
+                    returnval = main
+                    return returnval
+                except:
+                    #print(raw_fsd.__dir__())
+                    try:
+                        print("???")
+                        for item2 in raw_fsd.__dir__():
+                            try:
+                                main2 = []
+                                if item2.startswith("__"):
+                                    continue
+                                else:
+                                    #print(type(raw_fsd[item2]))
+                                    if type(raw_fsd[item2]) == dictLoader.DictLoader:
+                                        main2.append(dictstuff(raw_fsd[item2], ret2))
+                                        #return(main)
+                                    elif type(raw_fsd[item2]) == miscLoaders.VectorLoader:
+                                        #print("?5")
+                                        main2.append(vectorstuff(raw_fsd[item2], ret2))
+                                    if type(raw_fsd[item2]) == objectLoader.ObjectLoader:
+                                        print((raw_fsd[item2]))
+                                        main2.append((objstuff(raw_fsd[item2], ret2)))
+                                    else:
+                                        #print(raw_fsd[item2])
+                                        main2.append({str(item2): (raw_fsd[item2])})
+                                        #main2.append({"innertype": str(item2), "innerobj": raw_fsd[item2]})
+                                        #print (main)
+                            except:
+                                pass
+                        #print(main2)
+                        returnval = main2
+                        return returnval
+                    except:
+                        #print(str(raw_fsd.__dir__()))
+                        pass
+                    returnval = main2
+                    return returnval
+            #return({"objLoadertype": type(main), "objLoaderObj": str(main)})
 
+        def deep_merge(dict1, dict2):
+            merged = dict1.copy()
+            for key, value in dict2.items():
+                if key in merged and isinstance(merged[key], dict) and isinstance(value, dict):
+                    merged[key] = deep_merge(merged[key], value)
+                else:
+                    merged[key] = value
+            return merged
+        
         schema = None
         pre_fsd_data = binLoader.LoadFSDDataInPython(fsd_file_path, schema, False, None)
 
         fsd_list = []
-        test = ""
-        fsd_tuple = {}
+        test = []
         print(type(pre_fsd_data))
         if type(pre_fsd_data) == dictLoader.DictLoader:
-            for item in pre_fsd_data:
-                #fsd_list = pre_fsd_data[item]
-                #print(pre_fsd_data[item])
-                fsd_list.append(str(pre_fsd_data[item]))
-                #print(pre_fsd_data[item].__dir__())
-                if type(pre_fsd_data[item]) == objectLoader.ObjectLoader:
-                    test = dictstuff(pre_fsd_data[item])
-                    fsd_list.append(test)
-            #print(fsd_list)
-            return fsd_list
+            fsd_json={str(fsd_file_path): []}
+            try:
+                for item in pre_fsd_data:
+                    if type(item) == int:
+                        fsd_json[str(fsd_file_path)].append({str(item): str(pre_fsd_data[item])})
+                        try:
+                            for items2 in pre_fsd_data[item].__schema__['attributes']:
+                                #print(items2)
+                                if type(pre_fsd_data[item][items2]) == dictLoader.DictLoader:
+                                    test = "??"
+                                    fsd_json[str(fsd_file_path)].append({str(items2): str(dictstuff(pre_fsd_data[item][items2], test))})
+                                else:
+                                    fsd_json[str(fsd_file_path)].append({str(items2): str(pre_fsd_data[item][items2])})
+                        except:
+                            continue
+                    #elif type(item) == dictLoader.DictLoader:
+                        #print("???")
+            except:
+                #print("?")
+                for item in pre_fsd_data.keys():
+                    if type(pre_fsd_data[item]) == dictLoader.DictLoader:
+                        fsd_json[str(fsd_file_path)].append({str(item): json.dumps(dictstuff(pre_fsd_data[item], test))})
+                    else:
+                        fsd_json[str(fsd_file_path)].append({str(item): json.dumps((pre_fsd_data[item]))})
+            
+
+            return fsd_json
+        
+        #WIP WIP WIP
         elif type(pre_fsd_data) == listLoader:
+            test = "??"
             for item in pre_fsd_data:
-                #fsd_list = pre_fsd_data[item]
-                #print(pre_fsd_data[item])
-                fsd_list.append(str(pre_fsd_data[item]))
-                #print(pre_fsd_data[item].__dir__())
                 if type(pre_fsd_data[item]) == objectLoader.ObjectLoader:
                     test = objstuff(pre_fsd_data[item])
                     fsd_list.append(test)
-            #print(fsd_list)
-            return fsd_list
+
+            return fsd_json
+        
         elif type(pre_fsd_data) == objectLoader.ObjectLoader:
-            #print(pre_fsd_data)
+            test = "??"
+            fsd_json=[]
+            for item in pre_fsd_data.__dir__():
+                #print(item)
+                if item.startswith("__"):
+                    continue
+                else:
+                    #print((item))
+                    item2 = pre_fsd_data.__getattr__(item)
+                    #fsd_json[str(fsd_file_path)].append(str(objstuff(item, test)))
+                    if type(item2) == objectLoader.ObjectLoader:
+                        #print(item2)
+                        fsd_json.append(str(objstuff(item2, test)))
+                        #print("??")
+                    if type(item2) == dictLoader.DictLoader:
+                        #print(item2)
+                        fsd_json.append(str(dictstuff(item2, test)))
+                        #print("??")
+                    else:
+                        fsd_json.append(str(item2))
+                    #fsd_json[str(item)].append(item)
+
+
+            #print(fsd_json)
+                
+            #fsd_list.append(fsd_json)
             
-            fsd_list.append(objstuff(pre_fsd_data))
-            return fsd_list
+
+            return fsd_json
         elif type(pre_fsd_data) == dictLoader.IndexLoader:
             #print(list(pre_fsd_data.items()))
-            for item in list(pre_fsd_data.items()):
+            fsd_json=[]
+            test = "??"
+            #fsd_json[str(fsd_file_path)].append(pre_fsd_data)
+            #fsd_list.append(fsd_json)
+            for item in (pre_fsd_data.items()):
                 #print(item)
-                fsd_list.append(str(item))
-            #fsd_list = json.dumps((test),indent=1)
-            return fsd_list
+                for items in item:
+                    #print(items)
+                    if type(items) == objectLoader.ObjectLoader:
+                        #print(item[items])
+                        fsd_json.append({str(item): (objstuff(items, test))})
+                        #print(items)
+                    if type(items) == dictLoader.DictLoader:
+                        #print(type(items))
+                        fsd_json.append({str(item): ((dictstuff(items,test)))}) 
+                    else:
+                        #print(type(items))
+                        fsd_json.append({str(item): str(items)})
+            #print(fsd_json)
+            #fsd_list.append(str(fsd_json))
+            return fsd_json
         elif type(pre_fsd_data) == dictLoader.MultiIndexLoader:
-            #pre_fsd_data2 = pre_fsd_data.items()
-            fsd_tuple = list(pre_fsd_data.items())
-            #print(fsd_list)
-            for item in fsd_tuple:
-                #fsd_list.append(str(objstuff(item)))
-                #print(item[1])
-                fsd_list.append(str(dictstuff(item[1])))
-            return fsd_list
-            #fsd_list = str(pre_fsd_data.items())
-            #fsd_list.append(str(item[1]))
-            #print(getattr(pre_fsd_data, item))
-            #result = item
-            #print(type(item))
-
-                #except:
-                #return None
+            #print(list(pre_fsd_data.items()))
+            fsd_json=[]
+            fsd_json2=[]
+            fsd_merged=[]
+            test = "??"
+            for item in pre_fsd_data.items():
+                #fsd_json.append({"entry": item[0]})
+                print(item[0])
+                try:
+                    for items in item:
+                        #if type(items)==int:
+                        #fsd_json.append({"entry": item[0], "values": str(items)})
+                            #continue
+                        #print (items.__dir__())
+                        #print (type(items))
+                        #fsd_json.append({"Entry": str(item[0]), "Values": str(items)})
+                        if type(items) == objectLoader.ObjectLoader:
+                            for items2 in items.__dir__():
+                                #print(item[1])
+                                if items2.startswith("__"):
+                                    continue
+                                else:
+                                    #fsd_json.append({"entry": str(item[0])})
+                                    testing = getattr(item[1],items2)
+                                    #fsd_json.append({str(item[0]): str(items), str(items2): str(testing)})
+                                    #print(getattr(items, items2))
+                                    #print(testing)
+                                    if type(testing) == dictLoader.DictLoader:
+                                        #print(testing)
+                                        try:
+                                            #print(testing.schema['type'])
+                                            #fsd_json.append({"entry": str(item[0]),  str(items2): ((dictstuff(testing)))})
+                                            for items3 in testing:
+                                                #print(type(testing))
+                                                #print(items3)
+                                                if type(testing) == objectLoader.ObjectLoader:
+                                                    #print((testing[items3]))
+                                                    fsd_json.append({"Entry": str(item[0]), str(items2): str(objstuff(testing), test)})
+                                                    continue
+                                                elif type(testing) == dictLoader.DictLoader:
+                                                    #print("???????")
+                                                    #fsd_json.append({"Entry": str(item[0]), str(items2): str((testing))})
+                                                    for item4 in testing.items():
+                                                        #print(items3)
+                                                        fsd_json.append({"Entry": str(item[0]), str(items2): str(items3), str(items3): str(item4)})
+                                                        #print(item4)
+                                                        for item5 in item4:
+                                                            #print(type(item5))
+                                                            if type(item5) == dictLoader.DictLoader:
+                                                                for item6 in item5:
+                                                                    #print(item6)
+                                                                    fsd_json.append(({"Entry": str(item[0]), str(items2): str(items3), str(items3): str(item4), str(item5): str(item6), str(item6): str(item5.__getattr__(item6))}))
+                                                            elif type(item5) == objectLoader.ObjectLoader:
+                                                                #print(item5)
+                                                                for item6 in item5.__dir__():
+                                                                    #print(item6)
+                                                                    if item6.startswith("__"):
+                                                                        continue
+                                                                    else:
+                                                                        item7 = (item5.__getattr__(item6))
+                                                                        if type(item7) == dictLoader.DictLoader:
+                                                                            #print(item7)
+                                                                            for item8 in item7:
+                                                                                item9 = (item7[item8])
+                                                                                #rint(str(item7.__getattr__(item8)))
+                                                                                fsd_json.append(({"Entry": str(item[0]), str(items2): str(items3), str(items3): str(item4), str(item5): str(item6), str(item6): str(item8)}))
+                                                                                if type(item9) == objectLoader.ObjectLoader:
+                                                                                    #print(objstuff(item9))
+                                                                                    for item10 in item9.__dir__():
+                                                                                        if item10.startswith("__"):
+                                                                                            continue
+                                                                                        else:
+                                                                                            item11 = (item9.__getattr__(item10))
+                                                                                            if type(item11) == dictLoader.DictLoader:
+                                                                                                item12 = (dictstuff(item11,test))
+                                                                                                fsd_json.append(({"Entry": str(item[0]), str(items2): str(items3), str(items3): str(item4), str(item5): str(item6), str(item6): str(item8), str(item8): str(item9), str(item9): str(item10), str(item10): str(item11), str(item11): str(item12)}))
+                                                                                            elif type(item11) == miscLoaders.VectorLoader:
+                                                                                                fsd_json.append(({"Entry": str(item[0]), str(items2): str(items3), str(items3): str(item4), str(item5): str(item6), str(item6): str(item8), str(item8): str(item9), str(item9): str(item10), str(item10): str(item11.data)}))    
+                                                                                            else:
+                                                                                                fsd_json.append(({"Entry": str(item[0]), str(items2): str(items3), str(items3): str(item4), str(item5): str(item6), str(item6): str(item8), str(item8): str(item9), str(item9): str(item10)}))
+                                                                                elif type(item9) == miscLoaders.VectorLoader:
+                                                                                    fsd_json.append(({"Entry": str(item[0]), str(items2): str(items3), str(items3): str(item4), str(item5): str(item6), str(item6): str(item8), str(item8): str(item9.data)}))
+                                                                                else:
+                                                                                    fsd_json.append(({"Entry": str(item[0]), str(items2): str(items3), str(items3): str(item4), str(item5): str(item6), str(item6): str(item8), str(item8): str((item9))}))     
+                                                                        elif type(item7) == miscLoaders.VectorLoader:
+                                                                            #print(item7.data)
+                                                                            fsd_json.append({"Entry": str(item[0]), str(items2): str(items3), str(items3): str(item4), str(item5): str(item6), str(item6): str("vectordata"), str("vectors for item : "): str(item7.data)})
+                                                                                    
+                                                                        else:
+                                                                            fsd_json.append(({"Entry": str(item[0]), str(items2): str(items3), str(items3): str(item4), str(item5): str(item6), str(item6): str(item7)}))
+                                                            else:
+                                                                #rint("?")
+                                                                fsd_json.append({"Entry": str(item[0]), str(items2): str((testing)), str(item4): str(item5)})
+                                                elif type(testing) == miscLoaders.VectorLoader:
+                                                    #print("?")
+                                                    fsd_json.append({"Entry": str(item[0]), str(items2): str(items3), str(items3): str(testing.data)})
+                                                    
+                                                else:
+                                                    fsd_json.append({"Entry": str(item[0]), str(items2): str(items3)})
+                                                    
+                                        except:
+                                            fsd_json.append({"Entry": str(item[0]), str(items2): str(dictstuff(testing,test))})
+                                            
+                                    elif type(testing) == miscLoaders.VectorLoader:
+                                        #print(">")
+                                        fsd_json.append({"Entry": str(item[0]), str(items2): str(vectorstuff(testing,test))})
+                                        
+                                    elif type(testing) == objectLoader.ObjectLoader:
+                                        #print(testing)
+                                        try:
+                                            for items3 in testing.__dir__():
+                                                if items3.startswith("__"):
+                                                    continue
+                                                else:
+                                                    #print(type(objstuff(getattr(testing,items3))))
+                                                    fsd_json.append({"Entry": str(item[0]), str(items2): str(objstuff(getattr(testing,items3),test))})
+                                                    
+                                        except:
+                                            print("?2")
+                                            fsd_json.append({"Entry": str(item[0]), str(items2): str(objstuff(testing,test))})
+                                            
+                                    else:
+                                        #print(items2)
+                                        fsd_json.append({"Entry": str(item[0]), str(items2): str(testing)})
+                                        
+                        elif type(items) == dictLoader.DictLoader:
+                            print("??")
+                    #fsd_json.append({"entry": item[0]})
+                except:
+                    raise
+                    #fsd_json.append((items))
+                    #print(fsd_json)
+                #fsd_json2.insert(item[0], str(item[1]))
+            return((fsd_json))
 
 
         else: #This should never trigger, and IndexLoader/MultiIndexLoader will error out the main loop anyway, so the data gets pushed to an alternate path
@@ -220,8 +569,7 @@ class FsdBinaryMiner(BaseMiner):
         else:
             file_path = self._resbrowser.get_file_info(resource_path).file_abspath
             fsd_list = self.fsd_parser(file_path)
-            #print(str(fsd_list))
-            return str(fsd_list)
+            return (fsd_list)
             
                 
     #def check_type(self, object):

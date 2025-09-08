@@ -325,7 +325,7 @@ class FsdBinaryMiner(BaseMiner):
 
         fsd_list = []
         test = []
-        print(type(pre_fsd_data))
+        #print(type(pre_fsd_data))
         if type(pre_fsd_data) == dictLoader.DictLoader:
             fsd_json2=[{}]
             try:
@@ -379,7 +379,7 @@ class FsdBinaryMiner(BaseMiner):
                     #print((item))
                     item2 = pre_fsd_data.__getattr__(item)
                     #fsd_json[str(fsd_file_path)].append(str(objstuff(item, test)))
-                    print(item2)
+                    #print(item2)
                     if type(item2) == objectLoader.ObjectLoader:
                         #print(item2)
                         fsd_json.append({str(item): (objstuff(getattr(item2, item), item, test))})
@@ -433,7 +433,7 @@ class FsdBinaryMiner(BaseMiner):
                 #fsd_json.append({"entry": item[0]})
                 fsd_json={str(item[0]): []}
                 fsd_json2={str(item[0]): []}
-                print(str(item[0]))
+                #print(str(item[0]))
                 try:
                     for items in item:
                         #if type(items)==int:

@@ -56,7 +56,8 @@ class FsdBinaryMiner(BaseMiner):
         import fsd.schemas.loaders.listLoader as listLoader
         import fsd.schemas.loaders.objectLoader as objectLoader
         import fsd.schemas.loaders as miscLoaders
-
+        import fsd.schemas.persistence as persistenceHelper
+        
         def vectorstuff(raw_fsd, returnval):
             #print(raw_fsd)
             #print(raw_fsd.data)
@@ -327,25 +328,34 @@ class FsdBinaryMiner(BaseMiner):
 
         fsd_list = []
         test = []
-        print(type(pre_fsd_data))
+        #print(type(pre_fsd_data))
         if type(pre_fsd_data) == dictLoader.DictLoader:
             fsd_json2=[{}]
             try:
                 for item in pre_fsd_data:
                     fsd_json=[{}]
-                    if type(item) == int:
-                        fsd_json.append({str(item): str(pre_fsd_data[item])})
-                        try:
-                            for items2 in pre_fsd_data[item].__schema__['attributes']:
-                                #print(items2)
-                                if type(pre_fsd_data[item][items2]) == dictLoader.DictLoader:
-                                    test = "??"
-                                    fsd_json.append({str(item): str(dictstuff(pre_fsd_data[item][items2], str(items2),  test))})
-                                else:
-                                    fsd_json.append({str(item): str(pre_fsd_data[item][items2])})
-                        except:
-                            #print(str(item))
-                            fsd_json.append({str(item): str(pre_fsd_data[item])})
+                    fsd_json.append({"TOC_ID": str(item)})
+                    try:
+                        for items2 in pre_fsd_data[item].__schema__['attributes']:
+                            fsd_json.append({str(item): str(items2)})
+                            test = "??"
+                            if type(pre_fsd_data[item][items2]) == dictLoader.DictLoader:
+                                fsd_json.append({str(items2): str(dictstuff(pre_fsd_data[item][items2], str(items2), test))})
+                            elif type(pre_fsd_data[item][items2]) == objectLoader.ObjectLoader:
+                                fsd_json.append({str(miscLoaders.VectorLoader): str(objstuff(pre_fsd_data[item][items2], str(items2), test))})
+                            elif type(pre_fsd_data[item][items2]) == miscLoaders.VectorLoader:
+                                fsd_json.append({str(items2): str(vectorstuff(pre_fsd_data[item][items2], test))})
+                            else:
+                                fsd_json.append({str(items2): str(pre_fsd_data[item][items2])})
+                    except:
+                        if type(pre_fsd_data[item]) == dictLoader.DictLoader:
+                            fsd_json.append({str(item): str(dictstuff(pre_fsd_data[item], str(item), test))})
+                        elif type(pre_fsd_data[item]) == objectLoader.ObjectLoader:
+                            fsd_json.append({str(item): str(dictstuff(pre_fsd_data[item], str(item), test))})
+                        elif type(pre_fsd_data[item]) == miscLoaders.VectorLoader:
+                            fsd_json.append({str(item): str(dictstuff(pre_fsd_data[item], str(item), test))})
+                        else:
+                            fsd_json.append({str(item): str((pre_fsd_data[item]))})
                     fsd_json2.append(fsd_json)
             except:
                 print("?")
@@ -353,21 +363,15 @@ class FsdBinaryMiner(BaseMiner):
                     fsd_json=[{}]
                     if type(pre_fsd_data[item]) == dictLoader.DictLoader:
                         fsd_json.append({str(item): str(dictstuff(pre_fsd_data[item], str(item), test))})
+                    elif type(pre_fsd_data[item]) == objectLoader.ObjectLoader:
+                        fsd_json.append({str(item): str(dictstuff(pre_fsd_data[item], str(item), test))})
+                    elif type(pre_fsd_data[item]) == miscLoaders.VectorLoader:
+                        fsd_json.append({str(item): str(dictstuff(pre_fsd_data[item], str(item), test))})
                     else:
-                        fsd_json.append({str(item): ((pre_fsd_data[item]))})
+                        fsd_json.append({str(item): str((pre_fsd_data[item]))})
                     fsd_json2.append(fsd_json)
 
             return fsd_json2
-        
-        #WIP WIP WIP
-        elif type(pre_fsd_data) == listLoader:
-            test = "??"
-            for item in pre_fsd_data:
-                if type(pre_fsd_data[item]) == objectLoader.ObjectLoader:
-                    test = objstuff(pre_fsd_data[item])
-                    fsd_list.append(test)
-
-            return fsd_json
         
         elif type(pre_fsd_data) == objectLoader.ObjectLoader:
             test = "??"
@@ -432,18 +436,12 @@ class FsdBinaryMiner(BaseMiner):
             fsd_complete_merge=[]
             test = "??"
             for item in pre_fsd_data.items():
-                #fsd_json.append({"entry": item[0]})
+                #print(str(item[0]))
                 fsd_json={str(item[0]): []}
                 fsd_json2={str(item[0]): []}
-                #print(str(item[0]))
+                fsd_json2[str(item[0])].append({"TOC_ID": str(item[0])})
                 try:
                     for items in item:
-                        #if type(items)==int:
-                        #fsd_json.append({"entry": item[0], "values": str(items)})
-                            #continue
-                        #print (items.__dir__())
-                        #print (type(items))
-                        #fsd_json.append({"Entry": str(item[0]), "Values": str(items)})
                         if type(items) == objectLoader.ObjectLoader:
                             for items2 in items.__dir__():
                                 #print(item[1])
@@ -480,14 +478,14 @@ class FsdBinaryMiner(BaseMiner):
                                     else:
                                         #print(items2)
                                         fsd_json2[str(item[0])].append({str(items2): str(testing)})
-                                  
+                            
                         else:
-                            #print({"Entry": str(item[0]), str(item): str(items)})
-                            continue
+                            fsd_json2[str(item[0])].append({str(item[0]): str(items)})
+
                             #fsd_json[str(item[0])].append({str(item): str(items)})
                     #fsd_json.append({"entry": item[0]})
                     #key = str(item[0])
-                    #print(key)
+                    #print("???")
                     fsd_intermediate_merged = dict(ChainMap({key: [fsd_json[key], fsd_json2[key]] if key in fsd_json2 else fsd_json[key] for key in fsd_json}, {key: fsd_json2[key] for key in fsd_json2 if key not in fsd_json}))
                     #print(fsd_intermediate_merged)
                     fsd_complete_merge.append(fsd_intermediate_merged)
@@ -499,10 +497,48 @@ class FsdBinaryMiner(BaseMiner):
             
 
             return(fsd_complete_merge)
+        
+        else: #This should never trigger except on ListLoader, and IndexLoader/MultiIndexLoader will error out the main loop anyway, so the data gets pushed to an alternate path
+            #WIP WIP WIP, I need to read the spec for this ListLoader crap
+            
+            fsd_list = [{}]
+            try:
+                fsd_list={str("List"): []}
+                for listItems in pre_fsd_data.items():
+                    fsd_list[str("List")].append({"TOC list": str(listItems)})
+                    items2 = "Sublevel 2"
+                    test = None
+                    if type(listItems) == dictLoader.DictLoader:
+                        #print(testing.schema['type'])
+                        fsd_list[str("List")].append({"Sublevel 1 Dict": (dictstuff(listItems, items2, test))})
+                                      
+                    elif type(listItems) == miscLoaders.VectorLoader:
+                        #print(">")
+                        fsd_list[str("List")].append({"Sublevel 1 Vector": (vectorstuff(listItems,test))})
+                    elif type(listItems) == objectLoader.ObjectLoader:
+                        #print(">")
+                        fsd_list[str("List")].append({"Sublevel 1 Object": (objstuff(listItems, items2, test))})
+                    else:
+                        continue
 
-
-        else: #This should never trigger, and IndexLoader/MultiIndexLoader will error out the main loop anyway, so the data gets pushed to an alternate path
-            raise
+            except:
+                for listItems in pre_fsd_data:
+                    fsd_list[str("List")].append({"TOC list": str(listItems)})
+                    items2 = "Sublevel 2"
+                    test = None
+                    if type(listItems) == dictLoader.DictLoader:
+                        #print(testing.schema['type'])
+                        fsd_list[str("List")].append({"Sublevel 1 Dict": (dictstuff(listItems, items2, test))})
+                                      
+                    elif type(listItems) == miscLoaders.VectorLoader:
+                        #print(">")
+                        fsd_list[str("List")].append({"Sublevel 1 Vector": (vectorstuff(listItems,test))})
+                    elif type(listItems) == objectLoader.ObjectLoader:
+                        #print(">")
+                        fsd_list[str("List")].append({"Sublevel 1 Object": (objstuff(listItems, items2, test))})
+                    else:
+                        continue
+            return fsd_list
            
 
 
@@ -515,10 +551,11 @@ class FsdBinaryMiner(BaseMiner):
             try:
                 schema_name = self._schemaname_respath_map[container_name]
                 schema_path = self._resbrowser.get_file_info(schema_name).file_abspath
-                print(str(container_name) + " has a separate schema file, adding to parser")
+                #print(str(container_name) + " has a separate schema file, adding to parser")
             except KeyError:
                 #schema_path = None
-                print(str(container_name) + " does not have a separate schema file, ignoring")
+                #print(str(container_name) + " does not have a separate schema file, ignoring")
+                pass
             finally:
                 #print(schema_path)
                 file_path = self._resbrowser.get_file_info(resource_path).file_abspath

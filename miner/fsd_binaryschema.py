@@ -44,14 +44,15 @@ class FsdBinaryMiner(BaseMiner):
         for container_name in sorted(self._contname_respath_map):
             yield container_name
 
-    def fsd_parser(self, fsd_file_path):
+    def fsd_parser(self, fsd_file_path, schema_path):
+        #Bunch of preliminary things here and functions to aid us in processing the metric ton of FSD nested nonsense
+        
         codeccp = self._resbrowser.get_file_info('app:/code.ccp').file_abspath
         sys.path.insert(0, codeccp)
         import fsd
         import fsd.schemas
         import fsd.schemas.binaryLoader as binLoader
         import fsd.schemas.loaders.dictLoader as dictLoader
-        #import fsd.schemas.loaders.dictLoader as DictLoader
         import fsd.schemas.loaders.listLoader as listLoader
         import fsd.schemas.loaders.objectLoader as objectLoader
         import fsd.schemas.loaders as miscLoaders
@@ -145,6 +146,8 @@ class FsdBinaryMiner(BaseMiner):
                                     test3.append({str(item): (dictstuff(item2, str(item), ret2))})
                                 elif type(item2) == objectLoader.ObjectLoader:
                                     test3.append({str(item): (objstuff(item2, str(item), ret2))})
+                                elif type(item2) == miscLoaders.VectorLoader:
+                                    test3.append({str(item): (vectorstuff(item2, ret2))})
                                 else:
                                     #print("?")
                                     test3.append({str(item): str(item2)})
@@ -318,14 +321,13 @@ class FsdBinaryMiner(BaseMiner):
                         pass
                     fsd_complete_merge = main2
                     return fsd_complete_merge
-            #return({"objLoadertype": type(main), "objLoaderObj": str(main)})
         
-        schema = None
-        pre_fsd_data = binLoader.LoadFSDDataInPython(fsd_file_path, schema, False, None)
+        ####THIS IS WHERE THE CODE ACTUALLY STARTS WORKING####
+        pre_fsd_data = binLoader.LoadFSDDataInPython(fsd_file_path, schema_path, False, None)
 
         fsd_list = []
         test = []
-        #print(type(pre_fsd_data))
+        print(type(pre_fsd_data))
         if type(pre_fsd_data) == dictLoader.DictLoader:
             fsd_json2=[{}]
             try:
@@ -343,7 +345,7 @@ class FsdBinaryMiner(BaseMiner):
                                     fsd_json.append({str(item): str(pre_fsd_data[item][items2])})
                         except:
                             #print(str(item))
-                            fsd_json.append({str(pre_fsd_data): str(pre_fsd_data[item])})
+                            fsd_json.append({str(item): str(pre_fsd_data[item])})
                     fsd_json2.append(fsd_json)
             except:
                 print("?")
@@ -505,15 +507,28 @@ class FsdBinaryMiner(BaseMiner):
 
 
         
-    def get_data(self, container_name, language=None, verbose=False, **kwargs):
+    def get_data(self, container_name, language=None, verbose=True, **kwargs):
+        
         try:
             resource_path = self._contname_respath_map[container_name]
+            schema_path=None
+            try:
+                schema_name = self._schemaname_respath_map[container_name]
+                schema_path = self._resbrowser.get_file_info(schema_name).file_abspath
+                print(str(container_name) + " has a separate schema file, adding to parser")
+            except KeyError:
+                #schema_path = None
+                print(str(container_name) + " does not have a separate schema file, ignoring")
+            finally:
+                #print(schema_path)
+                file_path = self._resbrowser.get_file_info(resource_path).file_abspath
+                #print(container_name)
+                fsd_list = self.fsd_parser(file_path, schema_path)
+                return (fsd_list)
         except KeyError:
             self._container_not_found(container_name)
-        else:
-            file_path = self._resbrowser.get_file_info(resource_path).file_abspath
-            fsd_list = self.fsd_parser(file_path)
-            return (fsd_list)
+        #schema_path = None
+
             
                 
     #def check_type(self, object):
@@ -536,6 +551,25 @@ class FsdBinaryMiner(BaseMiner):
                 continue
             contname_respath_map[container_name] = resource_path
         return contname_respath_map
+        
+    @cachedproperty    
+    def _schemaname_respath_map(self):
+        """
+        Map between container names and resource path names to static cache files.
+        Format: {container path: resource path to static cache}
+        """
+        contname_respath_map = {}
+        for resource_path in self._resbrowser.respath_iter():
+            # Filter by resource file path first
+            container_name = self.__get_schema_container_name(resource_path)
+            #print(container_name)
+            if container_name is None:
+                continue
+            # Now, check if it's actually sqlite database and if it has cache table
+            if self.__check_cache(resource_path):
+                continue
+            contname_respath_map[container_name] = resource_path
+        return contname_respath_map
 
     def __get_container_name(self, resource_path):
         """
@@ -546,6 +580,17 @@ class FsdBinaryMiner(BaseMiner):
         if not m:
             return None
         return m.group('fname')
+        
+    def __get_schema_container_name(self, schema_path):
+        """
+        Validate resource path and return stripped resource
+        name if path is valid, return None otherwise.
+        """
+        s = re.match(r'^res:/staticdata/(?P<fname>.+).schema$', schema_path)
+        #print(s)
+        if not s:
+            return None
+        return s.group('fname')
 
     def __check_cache(self, resource_path):
         """Check if file is actually SQLite database and has cache table."""

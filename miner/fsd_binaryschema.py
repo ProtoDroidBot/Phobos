@@ -72,7 +72,7 @@ class FsdBinaryMiner(BaseMiner):
             return returnval
   
 
-        def dictstuff(raw_fsd, returnval):
+        def dictstuff(raw_fsd, idx, returnval):
             test3 = [{}]
             ret2 = "??"
             fsd_complete_merge = []
@@ -92,26 +92,27 @@ class FsdBinaryMiner(BaseMiner):
                         if type(raw_fsd[item]) == miscLoaders.VectorLoader:
                             test3.append({str(item):  vectorstuff(raw_fsd[item], ret2)}) 
                         elif type(raw_fsd[item]) == dictLoader.DictLoader:
-                            test3.append({str(item): (dictstuff(raw_fsd[item], ret2))})
+                            test3.append({str(item): (dictstuff(raw_fsd[item], str(item), ret2))})
                             
                         elif type(raw_fsd[item]) == objectLoader.ObjectLoader:
-                            test3.append({str(item): (raw_fsd[item], ret2)}) 
+                            test3.append({str(item): objstuff(raw_fsd[item],  str(item), ret2)}) 
                             #test3.append({str(item): (raw_fsd[item])})
                         else:
-                            test3.append({str(item): raw_fsd[item]})
-                    fsd_complete_merge = test3[str(item)]
+                            test3.append({str(item): str(raw_fsd[item])})
+                    fsd_complete_merge = test3
                 return fsd_complete_merge
             except:
                 #print(type(raw_fsd))
                 if type(raw_fsd) == objectLoader.ObjectLoader:
                     #print(type(raw_fsd))
                     for item in raw_fsd.__schema__['attributes']:
+                        test3.append({str(idx): (item)})
                         for item2 in raw_fsd.__schema__['attributes'][item]:
                             if item2.startswith("__"):
                                 continue
                             else:
                                 #print(raw_fsd[item][item2])
-                                test3.append({str(item): str(item2), str(item2): (item2)})
+                                test3.append({str(idx): str(item2)})
                                 fsd_complete_merge.append(test3)
                     fsd_complete_merge = test3
                     return fsd_complete_merge
@@ -120,12 +121,13 @@ class FsdBinaryMiner(BaseMiner):
                     #print(raw_fsd.__dir__())
                     try:
                         for item in raw_fsd.__schema__['attributes']:
+                            test3.append({str(idx): (raw_fsd[item])})
                             for item2 in raw_fsd.__schema__['attributes'][item]:
                                 if item2.startswith("__"):
                                     continue
                                 else:
                                     #print(item2)
-                                    test3.append({str(item): str(item2), str(item2): (raw_fsd[item][item2])})
+                                    test3.append({str(item2): str(raw_fsd[item][item2])})
                         fsd_complete_merge = test3
                         return fsd_complete_merge
                     except:
@@ -134,17 +136,18 @@ class FsdBinaryMiner(BaseMiner):
                         #print(raw_fsd)
                         for item in raw_fsd.items():
                             #test3.append({str((raw_fsd)): str(item)})
-                            #print(">>")
+                            #print(idx)
                             #print(item)
+                            #test3.append({str(raw_fsd): str(item)})
                             for item2 in item:
-                                #print(type(item2))
+                                #print(type(item))
                                 if type(item2) == dictLoader.DictLoader:
-                                    test3.append({str(item): str(item2), str(item2): (dictstuff(item2, ret2))})
+                                    test3.append({str(item): (dictstuff(item2, str(item), ret2))})
                                 elif type(item2) == objectLoader.ObjectLoader:
-                                    test3.append({str(item): str(item2), str(item2): (objstuff(item2, ret2))})
+                                    test3.append({str(item): (objstuff(item2, str(item), ret2))})
                                 else:
                                     #print("?")
-                                    test3.append({str(item): str(item2), str(item2): (item2)})
+                                    test3.append({str(item): str(item2)})
                         #print(test3)
                     fsd_complete_merge = test3
                     return fsd_complete_merge
@@ -153,53 +156,44 @@ class FsdBinaryMiner(BaseMiner):
                         for item in raw_fsd:
                             #print(item)
                             try:
-                                for item2 in raw_fsd[item].__dir__():
-                                    if item2.startswith("__"):
-                                        continue
-                                    elif type(raw_fsd[item][item2]) == miscLoaders.VectorLoader:
-                                        #print("?")
-                                        test3.append({str(item): str(item2), str(item2): (vectorstuff(raw_fsd[item][item2], ret2))})
-                                    elif type(raw_fsd[item][item2]) == dictLoader.DictLoader:
-                                        #print("????1")
-                                        test3.append({str(item): str(item2), str(item2): (dictstuff(raw_fsd[item][item2],ret2))})
-                                    elif type(raw_fsd[item][item2]) == objectLoader.ObjectLoader:
-                                        #print("????2")
-                                        test3.append({str(item): str(item2), str(item2): (objstuff(raw_fsd[item][item2], ret2))})
-                                    else:
-                                        #print("????3")
-                                        test3.append({str(item): str(item2), str(item2): (raw_fsd[item][item2])})
+                                if type(raw_fsd[item]) == miscLoaders.VectorLoader:
+                                    #print("?")
+                                    test3.append({str(item): (vectorstuff(raw_fsd[item], ret2))})
+                                elif type(raw_fsd[item]) == dictLoader.DictLoader:
+                                    #print("????1")
+                                    test3.append({str(item): (dictstuff(raw_fsd[item], str(item), ret2))})
+                                elif type(raw_fsd[item]) == objectLoader.ObjectLoader:
+                                    #print("????2")
+                                    test3.append({str(item): (objstuff(raw_fsd[item], str(item),  ret2))})
+                                else:
+                                    #print("????3")
+                                    test3.append({str(item): str(raw_fsd[item])})
                                 fsd_complete_merge = test3
                                 return fsd_complete_merge
                             except:
                                 #print(item)
-                                for item2 in raw_fsd[item].__dir__():
-                                    if item2.startswith("__"):
-                                        continue
-                                    #print(type(item2))
-                                    #print(item2.values)
-                                    #print(item2)
-                                    #test3.append({str(item): (raw_fsd[item])})
-                                    if type(item2) == miscLoaders.VectorLoader:
-                                        #print("?1")
-                                        test3.append({str(item): self.vectorstuff(item2)})
-                                    elif type(item2) == dictLoader.DictLoader:
-                                        #print("????2")
-                                        test3.append({str(item): (dictstuff(item2, ret2))})
-                                    elif type(item2) == objectLoader.ObjectLoader:
-                                        #print("?1")
-                                        test3.append({str(item): (objstuff(item2, ret2))})
-                                    else:
-                                        test3.append({str(item), str(item2)})
+                                if type(raw_fsd[item]) == miscLoaders.VectorLoader:
+                                    #print("?")
+                                    test3.append({str(item): (vectorstuff(raw_fsd[item], ret2))})
+                                elif type(raw_fsd[item]) == dictLoader.DictLoader:
+                                    #print("????1")
+                                    test3.append({str(item): (dictstuff(raw_fsd[item], str(item), ret2))})
+                                elif type(raw_fsd[item]) == objectLoader.ObjectLoader:
+                                    #print("????2")
+                                    test3.append({str(item): (objstuff(raw_fsd[item], str(item),  ret2))})
+                                else:
+                                    #print("????3")
+                                    test3.append({str(item): str(raw_fsd[item])})
                                 #test2 = test2 + test3
                                 #print(test3)
-                                    fsd_complete_merge = test3
-                                    return fsd_complete_merge
+                                fsd_complete_merge = test3
+                                return fsd_complete_merge
                     except:
                         fsd_complete_merge = test3
                         return fsd_complete_merge
             return fsd_complete_merge
         
-        def objstuff(raw_fsd, returnval):
+        def objstuff(raw_fsd, idx, returnval):
             #testing1 = raw_fsd
             ret2 = "??"
             main = [{}]
@@ -207,6 +201,7 @@ class FsdBinaryMiner(BaseMiner):
             #main5 = [{}]
             fsd_complete_merge = []
             #fsd_intermediate_merged = []
+            #print(raw_fsd)
             if type(raw_fsd) == str or type(raw_fsd) == int or type(raw_fsd) == bool:
                 #print(raw_fsd)
                 return raw_fsd
@@ -214,8 +209,9 @@ class FsdBinaryMiner(BaseMiner):
                 raw_fsd = "None"
                 return raw_fsd
             elif type(raw_fsd) == objectLoader.ObjectLoader:
-                #print(type(raw_fsd))
+                #print(raw_fsd)
                 main2 = [{}]
+                
                 for item2 in raw_fsd.__dir__():
                     #print(item2)
                     try:
@@ -224,14 +220,15 @@ class FsdBinaryMiner(BaseMiner):
                             continue
                         #print(type(raw_fsd[item2]))
                         if type(raw_fsd[item2]) == dictLoader.DictLoader:
-                            main2.append(({str(item2): dictstuff(raw_fsd[item2], ret2)}))
+                            #print(raw_fsd[item2])
+                            main2.append(({str(item2): dictstuff(raw_fsd[item2], str(item2), ret2)}))
                             #return(main)
                         elif type(raw_fsd[item2]) == miscLoaders.VectorLoader:
                             #print("?5")
                             main2.append(({str(item2): vectorstuff(raw_fsd[item2], ret2)}))
                         elif type(raw_fsd[item2]) == objectLoader.ObjectLoader:
                             #print((raw_fsd[item2]))
-                            main2.append(({str(item2): objstuff(raw_fsd[item2], ret2)}))
+                            main2.append(({str(item2): objstuff(raw_fsd[item2], str(item2), ret2)}))
                         else:
                             #print(raw_fsd[item2])
                             main2.append(({str(item2): str(raw_fsd[item2])}))
@@ -240,6 +237,7 @@ class FsdBinaryMiner(BaseMiner):
 
                         #main2.append({str(item2), str(raw_fsd[item2])})
                     except:
+                        #print("muhc")
                         pass
                 #print(main2)
                 fsd_complete_merge = main2
@@ -254,43 +252,41 @@ class FsdBinaryMiner(BaseMiner):
                     for item1 in raw_fsd.schema:
                         temp2 = "?"
                         if type(item1) == str or type(item1) == int or type(item1) == bool:
-                            #print(item1)
-                            return item1
-                        #print(item1)
+                            main4.append({str(idx): str(item1)})
+                            
                         testing2 = (item1.schema['attributes'])
+                        
                         for item2 in testing2:
-                            item3 = (getattr(item1, item2))
-                            #print(" ! " + item3)
+                            #item3 = (getattr(item1, item2))
+                            print(" ! " + item3)
                             #main = ()
-                            if type(item3) == dictLoader.DictLoader:
+                            if type(item2) == dictLoader.DictLoader:
                                 temp2 = str(item2)
-                                main4.append((dictstuff(item3, ret2)))
+                                main4.append({str(item2): dictstuff(item3, str(item2), ret2)})
                                 #return item4
                             if type(item2) == miscLoaders.VectorLoader:
                                 #item4 = vectorstuff(item3)
                                 #print("?4")
                                 temp2 = str(item2)
-                                main4.append((vectorstuff(item3, ret2)))
+                                main4.append({str(item2): vectorstuff(item2, ret2)})
                                 #return item4  
                                 #return result
                             else:
                                 temp2 = str(item2)
                                 #print(raw_fsd.__getattr__(item))
-                                #print("???")
-                                main4.append({str(item2), (item3)})
+                                print("???")
+                                main4.append({str(idx), (item2)})
                                 #print(raw_fsd.Get[item])
                             #return main
                                 #fsd_list.append(str(result))
-                            temp1 = temp2
-                        temp3 = temp1
-                    print(temp3)
+                    #print(temp3)
                     #print(main)
                     fsd_complete_merge = main4
                     return fsd_complete_merge
                 except:
                     #print(raw_fsd.__dir__())
                     try:
-                        print("???")
+                        #print("???")
                         for item2 in raw_fsd.__dir__():
                             try:
                                 main2 = [{}]
@@ -299,14 +295,14 @@ class FsdBinaryMiner(BaseMiner):
                                 else:
                                     #print(type(raw_fsd[item2]))
                                     if type(raw_fsd[item2]) == dictLoader.DictLoader:
-                                        main2.append(dictstuff(raw_fsd[item2], ret2))
+                                        main2.append({str(item2): dictstuff(raw_fsd[item2], ret2)})
                                         #return(main)
                                     elif type(raw_fsd[item2]) == miscLoaders.VectorLoader:
                                         #print("?5")
-                                        main2.append(vectorstuff(raw_fsd[item2], ret2))
+                                        main2.append({str(item2): vectorstuff(raw_fsd[item2], ret2)})
                                     if type(raw_fsd[item2]) == objectLoader.ObjectLoader:
                                         print((raw_fsd[item2]))
-                                        main2.append((objstuff(raw_fsd[item2], ret2)))
+                                        main2.append({str(item2): (objstuff(raw_fsd[item2], ret2))})
                                     else:
                                         #print(raw_fsd[item2])
                                         main2.append({str(item2): (raw_fsd[item2])})
@@ -331,33 +327,35 @@ class FsdBinaryMiner(BaseMiner):
         test = []
         print(type(pre_fsd_data))
         if type(pre_fsd_data) == dictLoader.DictLoader:
-            fsd_json={str(fsd_file_path): []}
+            fsd_json2=[{}]
             try:
                 for item in pre_fsd_data:
+                    fsd_json=[{}]
                     if type(item) == int:
-                        fsd_json[str(fsd_file_path)].append({str(item): str(pre_fsd_data[item])})
+                        fsd_json.append({str(item): str(pre_fsd_data[item])})
                         try:
                             for items2 in pre_fsd_data[item].__schema__['attributes']:
                                 #print(items2)
                                 if type(pre_fsd_data[item][items2]) == dictLoader.DictLoader:
                                     test = "??"
-                                    fsd_json[str(fsd_file_path)].append({str(items2): str(dictstuff(pre_fsd_data[item][items2], test))})
+                                    fsd_json.append({str(item): str(dictstuff(pre_fsd_data[item][items2], str(items2),  test))})
                                 else:
-                                    fsd_json[str(fsd_file_path)].append({str(items2): str(pre_fsd_data[item][items2])})
+                                    fsd_json.append({str(item): str(pre_fsd_data[item][items2])})
                         except:
-                            continue
-                    #elif type(item) == dictLoader.DictLoader:
-                        #print("???")
+                            #print(str(item))
+                            fsd_json.append({str(pre_fsd_data): str(pre_fsd_data[item])})
+                    fsd_json2.append(fsd_json)
             except:
-                #print("?")
-                for item in pre_fsd_data.keys():
+                print("?")
+                for item in pre_fsd_data:
+                    fsd_json=[{}]
                     if type(pre_fsd_data[item]) == dictLoader.DictLoader:
-                        fsd_json[str(fsd_file_path)].append({str(item): json.dumps(dictstuff(pre_fsd_data[item], test))})
+                        fsd_json.append({str(item): str(dictstuff(pre_fsd_data[item], str(item), test))})
                     else:
-                        fsd_json[str(fsd_file_path)].append({str(item): json.dumps((pre_fsd_data[item]))})
-            
+                        fsd_json.append({str(item): ((pre_fsd_data[item]))})
+                    fsd_json2.append(fsd_json)
 
-            return fsd_json
+            return fsd_json2
         
         #WIP WIP WIP
         elif type(pre_fsd_data) == listLoader:
@@ -376,20 +374,22 @@ class FsdBinaryMiner(BaseMiner):
                 #print(item)
                 if item.startswith("__"):
                     continue
+                    
                 else:
                     #print((item))
                     item2 = pre_fsd_data.__getattr__(item)
                     #fsd_json[str(fsd_file_path)].append(str(objstuff(item, test)))
+                    print(item2)
                     if type(item2) == objectLoader.ObjectLoader:
                         #print(item2)
-                        fsd_json.append(str(objstuff(item2, test)))
+                        fsd_json.append({str(item): (objstuff(getattr(item2, item), item, test))})
                         #print("??")
                     if type(item2) == dictLoader.DictLoader:
                         #print(item2)
-                        fsd_json.append(str(dictstuff(item2, test)))
+                        fsd_json.append({str(item): (dictstuff(item2, item, test))})
                         #print("??")
                     else:
-                        fsd_json.append(str(item2))
+                        fsd_json.append({str(item): str(item2)})
                     #fsd_json[str(item)].append(item)
 
 
@@ -411,11 +411,11 @@ class FsdBinaryMiner(BaseMiner):
                     #print(items)
                     if type(items) == objectLoader.ObjectLoader:
                         #print(item[items])
-                        fsd_json.append({str(item): (objstuff(items, test))})
+                        fsd_json.append({str(item): (objstuff(items, item, test))})
                         #print(items)
                     if type(items) == dictLoader.DictLoader:
                         #print(type(items))
-                        fsd_json.append({str(item): ((dictstuff(items,test)))}) 
+                        fsd_json.append({str(item): ((dictstuff(items, item, test)))}) 
                     else:
                         #print(type(items))
                         fsd_json.append({str(item): str(items)})
@@ -455,11 +455,11 @@ class FsdBinaryMiner(BaseMiner):
                                     #print(testing)
                                     if type(testing) == dictLoader.DictLoader:
                                         #print(testing.schema['type'])
-                                        fsd_json2[str(item[0])].append({str(items2): str(dictstuff(testing, test))})
+                                        fsd_json2[str(item[0])].append({str(items2): (dictstuff(testing, items2, test))})
                                         
                                     elif type(testing) == miscLoaders.VectorLoader:
                                         #print(">")
-                                        fsd_json2[str(item[0])].append({str(items2): str(vectorstuff(testing,test))})
+                                        fsd_json2[str(item[0])].append({str(items2): (vectorstuff(testing,test))})
                                         
                                     elif type(testing) == objectLoader.ObjectLoader:
                                         #print(testing)
@@ -469,11 +469,11 @@ class FsdBinaryMiner(BaseMiner):
                                                     continue
                                                 else:
                                                     #print(type(objstuff(getattr(testing,items3))))
-                                                    fsd_json2[str(item[0])].append({str(items3): str(objstuff(getattr(testing,items3),test))})
+                                                    fsd_json2[str(item[0])].append({str(items3): (objstuff(getattr(testing,items3), items3, test))})
                                                     
                                         except:
                                             #print("?2")
-                                            fsd_json2[str(item[0])].append({str(items2): str(objstuff(testing,test))})
+                                            fsd_json2[str(item[0])].append({str(items2): (objstuff(testing, items2, test))})
                                             
                                     else:
                                         #print(items2)

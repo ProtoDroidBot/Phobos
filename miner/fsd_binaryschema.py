@@ -69,37 +69,37 @@ class FsdBinaryMiner(BaseMiner):
         # Function for repeated calls to format objectLoader variables. Please ensure you are calling this function with an object type = dictLoader.DictLoader
         def dictstuff(raw_fsd, idx, returnval):
             ret2 = "??"
-            main = []
             fsd_complete_merge = []
 
             
             for items1 in raw_fsd:
-                #main.append(str(idx))
+                #fsd_complete_merge.append(str(idx))
                 #print(idx)
                 try:
                     #test3.append("FSD_DICT_debug: " + str(raw_fsd))
                     #test3.append({str(items1): str(raw_fsd[items1])})
                     if type(raw_fsd[items1]) == miscLoaders.VectorLoader:
                                 #print("?")
-                        main.append([str(idx), (vectorstuff(raw_fsd[items1], ret2))])
+                        fsd_complete_merge.append({str(items1): (vectorstuff(raw_fsd[items1], ret2))})
                     elif type(raw_fsd[items1]) == dictLoader.DictLoader:
                         #print("????1")
-                        main.append([str(idx), (dictstuff(raw_fsd[items1], (items1), ret2))])
+                        fsd_complete_merge.append({str(items1): (dictstuff(raw_fsd[items1], (items1), ret2))})
                     elif type(raw_fsd[items1]) == objectLoader.ObjectLoader:
                         #print("????2")
-                        main.append([str(idx), (objstuff(raw_fsd[items1], (items1),  ret2))])
+                        fsd_complete_merge.append({str(items1): (objstuff(raw_fsd[items1], (items1),  ret2))})
                     else:
-                        main.append([str(idx), {str(items1): str(raw_fsd[items1])}])
+                        fsd_complete_merge.append({str(items1): str(raw_fsd[items1])})
+
                 except:
                     raise
-            fsd_complete_merge = main
+
             return fsd_complete_merge
         
         # Function for repeated calls to format objectLoader variables. Please ensure you are calling this function with an object type = objectLoader.ObjectLoader
         def objstuff(raw_fsd, idx, returnval):
             ret2 = "??"
-            main = []
             fsd_complete_merge = []
+            #fsd_complete_merge.append(str(idx))
 
             if type(raw_fsd) == objectLoader.ObjectLoader:
                 for items1 in raw_fsd.__dir__():
@@ -113,18 +113,17 @@ class FsdBinaryMiner(BaseMiner):
                         #main.append("FSD_OBJ_debug: " + str(raw_fsd))
                         #main.append({str(items1): str(item2)})
                         if type(item2) == miscLoaders.VectorLoader:
-                            main.append([str(idx), (vectorstuff(item2, ret2))])
+                            fsd_complete_merge.append({str(items1): (vectorstuff(item2, ret2))})
                         elif type(item2) == dictLoader.DictLoader:
                             #print("????1")
-                            main.append([str(idx), (dictstuff(item2, (items1), ret2))])
+                            fsd_complete_merge.append({str(items1): (dictstuff(item2, (items1), ret2))})
                         elif type(item2) == objectLoader.ObjectLoader:
                             #print("????2")
-                            main.append([str(idx), (objstuff(item2, (items1),  ret2))])
+                            fsd_complete_merge.append({str(items1): (objstuff(item2, (items1),  ret2))})
                         else:
-                            main.append([str(idx), {str(items1): str(item2)}])
+                            fsd_complete_merge.append({str(items1): str(item2)})
                     except:
                         raise
-                fsd_complete_merge = main
             return fsd_complete_merge
         
         #### THIS IS WHERE THE CODE ACTUALLY STARTS WORKING ####
@@ -138,23 +137,21 @@ class FsdBinaryMiner(BaseMiner):
 
             # It needs to be like this list=[{}], sorry. Otherwise I get this fun little error: "unable to write data with JsonWriter - TypeError: Object of type set is not JSON serializable"
             # Or does it!?
-            fsd_json=[]
             test="??"
-            fsd_json.append(dictstuff(pre_fsd_data, str("FSD_ENTRY"), test))
-            return fsd_json
+            fsd_json_inter = (dictstuff(pre_fsd_data, str("FSD_DICT"), test))
+            return (fsd_json_inter)
         
         # Used for if the type of the parsed container is an FSD Object, generic catchall for all entries labled with <FSD Object: (File path)>. Part of the objectLoader Library
         elif type(pre_fsd_data) == objectLoader.ObjectLoader:
-            fsd_json=[]
             test="??"
-            fsd_json.append(objstuff(pre_fsd_data, str("FSD_ENTRY"), test))
-            return fsd_json
+            fsd_json_inter = (objstuff(pre_fsd_data, str("FSD_OBJ"), test))
+            return (fsd_json_inter)
 
         
         # Used for if the type of the parsed container is an FSD Index, part of the dictLoader Library
         elif type(pre_fsd_data) == dictLoader.IndexLoader:
             test = "??"
-            fsd_json=[]
+            fsd_json_inter=[]
             for item in (pre_fsd_data.items()):
                 #fsd_json.append(str("FSD_ENTRY: ") + str(item[0]))
 
@@ -163,23 +160,24 @@ class FsdBinaryMiner(BaseMiner):
                     #print(items)
                     if type(items) == objectLoader.ObjectLoader:
                         #print(item[items])
-                        fsd_json.append(objstuff(items, item[0], test))
+                        fsd_json_inter.append({str(item[0]): objstuff(items, item[0], test)})
                         #print(items)
                     elif type(items) == dictLoader.DictLoader:
                         #print(type(items))
-                        fsd_json.append(dictstuff(items, item[0], test))
+                        fsd_json_inter.append({str(item[0]): dictstuff(items, item[0], test)})
                     elif type(items) == miscLoaders.VectorLoader:
                         #print(type(items))
-                        fsd_json.append(vectorstuff(items, test)) 
+                        fsd_json_inter.append({str(item[0]): vectorstuff(items, test)}) 
                     else:
                         #print(type(items))
-                        fsd_json.append(str(items))
-            return fsd_json
+                        fsd_json_inter.append({str(item[0]): str(items)})
+            
+            return dict({"Type: FSD Index": fsd_json_inter})
         
         # Used for if the type of the parsed container is an FSD Multi Index, part of the dictLoader Library. This one was an actual royal pain as it typically combines the dict, object, and vectorLoader Libraries in weird ways I haven't explored yet.
         elif type(pre_fsd_data) == dictLoader.MultiIndexLoader:
             test = "??"
-            fsd_json=[]
+            fsd_json_inter=[]
             for item in (pre_fsd_data.items()):
                 #fsd_json.append(str("FSD_ENTRY: ") + str(item[0]))
 
@@ -188,60 +186,60 @@ class FsdBinaryMiner(BaseMiner):
                     #print(items)
                     if type(items) == objectLoader.ObjectLoader:
                         #print(item[items])
-                        fsd_json.append(objstuff(items, item[0], test))
+                        fsd_json_inter.append({str(item[0]): objstuff(items, item[0], test)})
                         #print(items)
                     elif type(items) == dictLoader.DictLoader:
                         #print(type(items))
-                        fsd_json.append(dictstuff(items, item[0], test))
+                        fsd_json_inter.append({str(item[0]): dictstuff(items, item[0], test)})
                     elif type(items) == miscLoaders.VectorLoader:
                         #print(type(items))
-                        fsd_json.append(vectorstuff(items, test)) 
+                        fsd_json_inter.append({str(item[0]): vectorstuff(items, test)}) 
                     else:
                         #print(type(items))
-                        fsd_json.append(str(items))
-            return fsd_json
+                        fsd_json_inter.append({str(item[0]): str(items)})
+            return ({"Type: FSD Multi Index": fsd_json_inter})
             
         else: # This should never trigger except on ListLoader, and IndexLoader/MultiIndexLoader will error out the main loop anyway, so the data gets pushed to an alternate path
             # WIP WIP WIP, I need to read the spec for this ListLoader crap
             # Also there are two load strategies for ListLoader entries.
-            fsd_list = []
+            fsd_json_inter = []
             try:
                 
                 for listItems in pre_fsd_data.items():
-                    fsd_list.append(str(listItems))
+                    fsd_json_inter.extend(str(listItems))
                     items2 = "FSD_ITEM_ENTRY"
                     test = None
                     if type(listItems) == dictLoader.DictLoader:
                         #print(testing.schema['type'])
-                        fsd_list.append((dictstuff(listItems, items2, test)))
+                        fsd_json_inter.extend((dictstuff(listItems, items2, test)))
                                       
                     elif type(listItems) == miscLoaders.VectorLoader:
                         #print(">")
-                        fsd_list.append((vectorstuff(listItems,test)))
+                        fsd_json_inter.extend((vectorstuff(listItems,test)))
                     elif type(listItems) == objectLoader.ObjectLoader:
                         #print(">")
-                        fsd_list.append((objstuff(listItems, items2, test)))
+                        fsd_json_inter.extend((objstuff(listItems, items2, test)))
                     else:
                         continue
 
             except:
                 for listItems in pre_fsd_data:
-                    fsd_list.append(str(listItems))
+                    fsd_json_inter.extend(str(listItems))
                     items2 = "FSD_ITEM_ENTRY"
                     test = None
                     if type(listItems) == dictLoader.DictLoader:
                         #print(testing.schema['type'])
-                        fsd_list.append((dictstuff(listItems, items2, test)))
+                        fsd_json_inter.extend((dictstuff(listItems, items2, test)))
                                       
                     elif type(listItems) == miscLoaders.VectorLoader:
                         #print(">")
-                        fsd_list.append((vectorstuff(listItems,test)))
+                        fsd_json_inter.extend((vectorstuff(listItems,test)))
                     elif type(listItems) == objectLoader.ObjectLoader:
                         #print(">")
-                        fsd_list.append((objstuff(listItems, items2, test)))
+                        fsd_json_inter.extend((objstuff(listItems, items2, test)))
                     else:
                         continue
-            return fsd_list
+            return ({"Type: FSD List": fsd_json_inter})
            
 
 

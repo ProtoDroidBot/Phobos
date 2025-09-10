@@ -211,14 +211,14 @@ class FsdBinaryMiner(BaseMiner):
                     test = None
                     if type(listItems) == dictLoader.DictLoader:
                         #print(testing.schema['type'])
-                        fsd_json_inter.extend((dictstuff(listItems, items2, test)))
+                        fsd_json_inter.append({(dictstuff(listItems, items2, test))})
                                       
                     elif type(listItems) == miscLoaders.VectorLoader:
                         #print(">")
-                        fsd_json_inter.extend((vectorstuff(listItems,test)))
+                        fsd_json_inter.append({(vectorstuff(listItems,test))})
                     elif type(listItems) == objectLoader.ObjectLoader:
                         #print(">")
-                        fsd_json_inter.extend((objstuff(listItems, items2, test)))
+                        fsd_json_inter.append({(objstuff(listItems, items2, test))})
                     else:
                         continue
 
@@ -229,14 +229,14 @@ class FsdBinaryMiner(BaseMiner):
                     test = None
                     if type(listItems) == dictLoader.DictLoader:
                         #print(testing.schema['type'])
-                        fsd_json_inter.extend((dictstuff(listItems, items2, test)))
+                        fsd_json_inter.append({(dictstuff(listItems, items2, test))})
                                       
                     elif type(listItems) == miscLoaders.VectorLoader:
                         #print(">")
-                        fsd_json_inter.extend((vectorstuff(listItems,test)))
+                        fsd_json_inter.append({(vectorstuff(listItems,test))})
                     elif type(listItems) == objectLoader.ObjectLoader:
                         #print(">")
-                        fsd_json_inter.extend((objstuff(listItems, items2, test)))
+                        fsd_json_inter.append({(objstuff(listItems, items2, test))})
                     else:
                         continue
             return ({"Type: FSD List": fsd_json_inter})

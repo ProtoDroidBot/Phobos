@@ -1,0 +1,762 @@
+#!/usr/bin/env python3
+"""
+EVE Universe Database Generator
+
+Extracts EVE Universe data from Phobos output and creates a normalized SQLite database
+with systems, constellations, regions, and jump connections.
+
+Usage:
+    python generate.py --output eve_universe.db --phobos-output ./output
+"""
+
+import sys
+import os
+import json
+import sqlite3
+import argparse
+from pathlib import Path
+from typing import Dict, List, Any, Optional, Tuple
+
+
+from typing import List, Dict, Any
+
+
+def _parse_float(value):
+    """Parse a float value from string, handling special cases."""
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        if value.lower() in ('inf', 'infinity'):
+            return None  # Store inf as NULL
+        if value.lower() in ('nan', '-nan'):
+            return None
+        try:
+            return float(value)
+        except ValueError:
+            return None
+    return None
+
+def _parse_bool(value):
+    """Parse a boolean value from string."""
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return 1 if value else 0
+    if isinstance(value, str):
+        return 1 if value.lower() == 'true' else 0
+    return None
+
+def extract_fsd_dict_data(fsd_entry: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Extract data from FSD_DICT structure into flat dictionary."""
+    result = {}
+    for item in fsd_entry:
+        if isinstance(item, dict):
+            for key, value in item.items():
+                result[key] = value
+    return result
+
+
+def create_database_schema(conn: sqlite3.Connection) -> None:
+    """Create the database schema."""
+    print("Creating database schema...")
+    
+    cursor = conn.cursor()
+    
+    # Drop existing tables
+    cursor.execute('DROP TABLE IF EXISTS jumps')
+    cursor.execute('DROP TABLE IF EXISTS systems')
+    cursor.execute('DROP TABLE IF EXISTS constellations')
+    cursor.execute('DROP TABLE IF EXISTS regions')
+    
+    # Regions table
+    cursor.execute('''
+        CREATE TABLE regions (
+            region_id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL,
+            x REAL,
+            y REAL,
+            z REAL
+        )
+    ''')
+    
+    # Constellations table
+    cursor.execute('''
+        CREATE TABLE constellations (
+            constellation_id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL,
+            region_id INTEGER,
+            x REAL,
+            y REAL,
+            z REAL,
+            FOREIGN KEY (region_id) REFERENCES regions (region_id)
+        )
+    ''')
+    
+    # Systems table
+    cursor.execute('''
+        CREATE TABLE systems (
+            system_id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL,
+            constellation_id INTEGER,
+            region_id INTEGER,
+            frost_line REAL,
+            habitable_zone_inner REAL,
+            habitable_zone_outer REAL,
+            x REAL,
+            y REAL,
+            z REAL,
+            star_age REAL,
+            star_luminosity REAL,
+            star_mass REAL,
+            star_metallicity REAL,
+            star_radius REAL,
+            star_spectral_class TEXT,
+            star_temperature REAL,
+            FOREIGN KEY (constellation_id) REFERENCES constellations (constellation_id),
+            FOREIGN KEY (region_id) REFERENCES regions (region_id)
+        )
+    ''')
+    
+    # Jumps table
+    cursor.execute('''
+        CREATE TABLE jumps (
+            from_system_id INTEGER,
+            to_system_id INTEGER,
+            PRIMARY KEY (from_system_id, to_system_id),
+            FOREIGN KEY (from_system_id) REFERENCES systems (system_id),
+            FOREIGN KEY (to_system_id) REFERENCES systems (system_id)
+        )
+    ''')
+    
+    conn.commit()
+    print("Database schema created")
+
+
+def process_eve_data(phobos_output_dir: str, db_path: str) -> None:
+    """Main processing function."""
+    phobos_path = Path(phobos_output_dir)
+    
+    print("Starting EVE Universe data processing...")
+    print(f"Phobos output directory: {phobos_path}")
+    print(f"Output database: {db_path}")
+    
+    # Load localization data for names
+    print("Loading localization data...")
+    localization_names = {}
+    loc_path = phobos_path / 'resource_pickle' / 'res__localizationfsd_localization_fsd_en-us.json'
+    if loc_path.exists():
+        with open(loc_path, 'r', encoding='utf-8') as f:
+            loc_data = json.load(f)
+            
+        if isinstance(loc_data, list) and len(loc_data) > 1 and isinstance(loc_data[1], dict):
+            for id_str, name_data in loc_data[1].items():
+                if isinstance(name_data, list) and len(name_data) > 0 and name_data[0]:
+                    try:
+                        localization_names[int(id_str)] = name_data[0]
+                    except ValueError:
+                        continue  # Skip non-numeric IDs
+        
+        print(f"Loaded {len(localization_names)} localized names")
+    else:
+        print("Warning: Localization file not found, using generic names")
+    
+    # Create database
+    conn = sqlite3.connect(db_path)
+    create_database_schema(conn)
+    cursor = conn.cursor()
+    
+    # Load regions
+    print("Loading regions...")
+    regions_path = phobos_path / 'fsd_binary_schema' / 'regions.json'
+    if not regions_path.exists():
+        raise FileNotFoundError(f"Regions file not found: {regions_path}")
+    
+    with open(regions_path, 'r', encoding='utf-8') as f:
+        regions_data = json.load(f)
+    
+    region_count = 0
+    for entry in regions_data:
+        for fsd_key, fsd_data in entry.items():
+            if fsd_key.startswith('FSD_DICT.'):
+                region_id = int(fsd_key.replace('FSD_DICT.', ''))
+                region_data = extract_fsd_dict_data(fsd_data)
+                name_id = region_data.get(f'{region_id}.nameID')
+                
+                # Extract 3D coordinates from center.vector_data
+                center_data = region_data.get(f'{region_id}.center', [])
+                x, y, z = None, None, None
+                if len(center_data) >= 2 and isinstance(center_data[1], dict):
+                    vector_data = center_data[1].get('vector_data', [])
+                    if len(vector_data) >= 3:
+                        x, y, z = vector_data[0], vector_data[1], vector_data[2]
+                
+                # Convert nameID to int if it's a string
+                if isinstance(name_id, str):
+                    try:
+                        name_id = int(name_id)
+                    except ValueError:
+                        name_id = None
+                
+                # Use nameID for localization lookup, fallback to region_id, then generic name
+                if name_id and name_id in localization_names:
+                    region_name = localization_names[name_id]
+                elif region_id in localization_names:
+                    region_name = localization_names[region_id]
+                else:
+                    region_name = f'Region {region_id}'
+                    
+                cursor.execute('''
+                    INSERT INTO regions (region_id, name, x, y, z) 
+                    VALUES (?, ?, ?, ?, ?)
+                ''', (region_id, region_name, x, y, z))
+                region_count += 1
+    
+    conn.commit()
+    print(f"Inserted {region_count} regions")
+    
+    # Load constellations
+    print("Loading constellations...")
+    constellations_path = phobos_path / 'fsd_binary_schema' / 'constellations.json'
+    if not constellations_path.exists():
+        raise FileNotFoundError(f"Constellations file not found: {constellations_path}")
+    
+    with open(constellations_path, 'r', encoding='utf-8') as f:
+        constellations_data = json.load(f)
+    
+    constellation_count = 0
+    for entry in constellations_data:
+        for fsd_key, fsd_data in entry.items():
+            if fsd_key.startswith('FSD_DICT.'):
+                constellation_id = int(fsd_key.replace('FSD_DICT.', ''))
+                constellation_data = extract_fsd_dict_data(fsd_data)
+                region_id = constellation_data.get(f'{constellation_id}.regionID')
+                name_id = constellation_data.get(f'{constellation_id}.nameID')
+                
+                # Extract 3D coordinates from center.vector_data
+                center_data = constellation_data.get(f'{constellation_id}.center', [])
+                x, y, z = None, None, None
+                if len(center_data) >= 2 and isinstance(center_data[1], dict):
+                    vector_data = center_data[1].get('vector_data', [])
+                    if len(vector_data) >= 3:
+                        x, y, z = vector_data[0], vector_data[1], vector_data[2]
+                
+                # Convert nameID to int if it's a string
+                if isinstance(name_id, str):
+                    try:
+                        name_id = int(name_id)
+                    except ValueError:
+                        name_id = None
+                
+                # Use nameID for localization lookup, fallback to constellation_id, then generic name
+                if name_id and name_id in localization_names:
+                    constellation_name = localization_names[name_id]
+                elif constellation_id in localization_names:
+                    constellation_name = localization_names[constellation_id]
+                else:
+                    constellation_name = f'Constellation {constellation_id}'
+                
+                cursor.execute('''
+                    INSERT INTO constellations (constellation_id, name, region_id, x, y, z) 
+                    VALUES (?, ?, ?, ?, ?, ?)
+                ''', (constellation_id, constellation_name, region_id, x, y, z))
+                constellation_count += 1
+    
+    conn.commit()
+    print(f"Inserted {constellation_count} constellations")
+    
+    # Load systems
+    print("Loading systems...")
+    systems_path = phobos_path / 'fsd_binary_schema' / 'systems.json'
+    
+    # Also load solarsystemcontent.json for star statistics
+    systems_content_path = phobos_path / 'fsd_binary_schema' / 'solarsystemcontent.json'
+    star_statistics = {}
+    
+    if systems_content_path.exists():
+        print("Loading star statistics from solarsystemcontent.json...")
+        with open(systems_content_path, 'r', encoding='utf-8') as f:
+            systems_content_data = json.load(f)
+        
+        if 'Type: FSD Multi Index' in systems_content_data:
+            content_data = systems_content_data['Type: FSD Multi Index']
+        else:
+            content_data = systems_content_data
+        
+        # Extract star statistics for each system
+        for system_dict in content_data:
+            for system_id_str, system_entries in system_dict.items():
+                if isinstance(system_entries, list):
+                    try:
+                        system_id = int(system_id_str)
+                        system_data = extract_fsd_dict_data(system_entries)
+                        star_key = f'{system_id}.star'
+                        
+                        if star_key in system_data and isinstance(system_data[star_key], list):
+                            star_data = extract_fsd_dict_data(system_data[star_key])
+                            stats_data = star_data.get('star.statistics', [])
+                            
+                            # Parse statistics list
+                            stats = {}
+                            if isinstance(stats_data, list):
+                                for stat_item in stats_data:
+                                    if isinstance(stat_item, dict):
+                                        for stat_key, stat_value in stat_item.items():
+                                            field_name = stat_key.replace('statistics.', '')
+                                            stats[field_name] = stat_value
+                            
+                            star_statistics[system_id] = stats
+                    except ValueError:
+                        continue
+        
+        print(f"Loaded star statistics for {len(star_statistics)} systems")
+    
+    # First try systems.json
+    if systems_path.exists():
+        with open(systems_path, 'r', encoding='utf-8') as f:
+            systems_file_data = json.load(f)
+        
+        processed_systems = set()
+        system_count = 0
+        
+        # Handle if systems.json is a list (like regions/constellations pattern)
+        if isinstance(systems_file_data, list):
+            for system_dict in systems_file_data:
+                for fsd_key, fsd_data in system_dict.items():
+                    if fsd_key.startswith('FSD_DICT.') and isinstance(fsd_data, list):
+                        try:
+                            system_id = int(fsd_key.replace('FSD_DICT.', ''))
+                            if system_id in processed_systems:
+                                continue
+                            processed_systems.add(system_id)
+                            
+                            system_data = extract_fsd_dict_data(fsd_data)
+                            constellation_id = system_data.get(f'{system_id}.constellationID')
+                            region_id = system_data.get(f'{system_id}.regionID') 
+                            name_id = system_data.get(f'{system_id}.nameID')
+                            
+                            # Extract additional system data
+                            frost_line = system_data.get(f'{system_id}.frostLine')
+                            habitable_zone_raw = system_data.get(f'{system_id}.habitableZone')
+                            
+                            # Parse habitable zone data (could be string or list)
+                            habitable_zone_inner, habitable_zone_outer = None, None
+                            if isinstance(habitable_zone_raw, str):
+                                try:
+                                    # Try to parse as Python literal (list)
+                                    import ast
+                                    habitable_zone = ast.literal_eval(habitable_zone_raw)
+                                    if isinstance(habitable_zone, list) and len(habitable_zone) >= 2:
+                                        habitable_zone_inner, habitable_zone_outer = float(habitable_zone[0]), float(habitable_zone[1])
+                                except (ValueError, SyntaxError):
+                                    pass
+                            elif isinstance(habitable_zone_raw, list) and len(habitable_zone_raw) >= 2:
+                                habitable_zone_inner, habitable_zone_outer = float(habitable_zone_raw[0]), float(habitable_zone_raw[1])
+                            
+                            # Extract 3D coordinates from center.vector_data
+                            center_data = system_data.get(f'{system_id}.center', [])
+                            x, y, z = None, None, None
+                            if len(center_data) >= 2 and isinstance(center_data[1], dict):
+                                vector_data = center_data[1].get('vector_data', [])
+                                if len(vector_data) >= 3:
+                                    x, y, z = vector_data[0], vector_data[1], vector_data[2]
+                            
+                            # Convert nameID to int if it's a string
+                            if isinstance(name_id, str):
+                                try:
+                                    name_id = int(name_id)
+                                except ValueError:
+                                    name_id = None
+                            
+                            # Use nameID for localization lookup, fallback to system_id, then generic name
+                            if name_id and name_id in localization_names:
+                                system_name = localization_names[name_id]
+                            elif system_id in localization_names:
+                                system_name = localization_names[system_id]
+                            else:
+                                system_name = f'System {system_id}'
+                            
+                            # Get star statistics
+                            star_stats = star_statistics.get(system_id, {})
+                            star_age = _parse_float(star_stats.get('age'))
+                            star_luminosity = _parse_float(star_stats.get('luminosity'))
+                            star_mass = _parse_float(star_stats.get('mass'))
+                            star_metallicity = _parse_float(star_stats.get('metallicity'))
+                            star_radius = _parse_float(star_stats.get('radius'))
+                            star_spectral_class = star_stats.get('spectralClass')
+                            star_temperature = _parse_float(star_stats.get('temperature'))
+                            
+                            cursor.execute('''
+                                INSERT INTO systems (system_id, name, constellation_id, region_id, frost_line, habitable_zone_inner, habitable_zone_outer, x, y, z,
+                                                   star_age, star_luminosity, star_mass, star_metallicity, star_radius, star_spectral_class, star_temperature) 
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            ''', (system_id, system_name, constellation_id, region_id, frost_line, habitable_zone_inner, habitable_zone_outer, x, y, z,
+                                  star_age, star_luminosity, star_mass, star_metallicity, star_radius, star_spectral_class, star_temperature))
+                            system_count += 1
+                        except ValueError:
+                            continue
+        else:
+            # Handle if systems.json is a dict
+            for fsd_key, fsd_data in systems_file_data.items():
+                if fsd_key.startswith('FSD_DICT.') and isinstance(fsd_data, list):
+                    try:
+                        system_id = int(fsd_key.replace('FSD_DICT.', ''))
+                        if system_id in processed_systems:
+                            continue
+                        processed_systems.add(system_id)
+                        
+                        system_data = extract_fsd_dict_data(fsd_data)
+                        constellation_id = system_data.get(f'{system_id}.constellationID')
+                        region_id = system_data.get(f'{system_id}.regionID') 
+                        name_id = system_data.get(f'{system_id}.nameID')
+                        
+                        # Extract additional system data
+                        frost_line = system_data.get(f'{system_id}.frostLine')
+                        habitable_zone_raw = system_data.get(f'{system_id}.habitableZone')
+                        
+                        # Parse habitable zone data (could be string or list)
+                        habitable_zone_inner, habitable_zone_outer = None, None
+                        if isinstance(habitable_zone_raw, str):
+                            try:
+                                # Try to parse as Python literal (list)
+                                import ast
+                                habitable_zone = ast.literal_eval(habitable_zone_raw)
+                                if isinstance(habitable_zone, list) and len(habitable_zone) >= 2:
+                                    habitable_zone_inner, habitable_zone_outer = float(habitable_zone[0]), float(habitable_zone[1])
+                            except (ValueError, SyntaxError):
+                                pass
+                        elif isinstance(habitable_zone_raw, list) and len(habitable_zone_raw) >= 2:
+                            habitable_zone_inner, habitable_zone_outer = float(habitable_zone_raw[0]), float(habitable_zone_raw[1])
+                        
+                        # Extract 3D coordinates from center.vector_data
+                        center_data = system_data.get(f'{system_id}.center', [])
+                        x, y, z = None, None, None
+                        if len(center_data) >= 2 and isinstance(center_data[1], dict):
+                            vector_data = center_data[1].get('vector_data', [])
+                            if len(vector_data) >= 3:
+                                x, y, z = vector_data[0], vector_data[1], vector_data[2]
+                        
+                        # Convert nameID to int if it's a string
+                        if isinstance(name_id, str):
+                            try:
+                                name_id = int(name_id)
+                            except ValueError:
+                                name_id = None
+                        
+                        # Use nameID for localization lookup, fallback to system_id, then generic name
+                        if name_id and name_id in localization_names:
+                            system_name = localization_names[name_id]
+                        elif system_id in localization_names:
+                            system_name = localization_names[system_id]
+                        else:
+                            system_name = f'System {system_id}'
+                        
+                        # Get star statistics
+                        star_stats = star_statistics.get(system_id, {})
+                        star_age = _parse_float(star_stats.get('age'))
+                        star_luminosity = _parse_float(star_stats.get('luminosity'))
+                        star_mass = _parse_float(star_stats.get('mass'))
+                        star_metallicity = _parse_float(star_stats.get('metallicity'))
+                        star_radius = _parse_float(star_stats.get('radius'))
+                        star_spectral_class = star_stats.get('spectralClass')
+                        star_temperature = _parse_float(star_stats.get('temperature'))
+                        
+                        cursor.execute('''
+                            INSERT INTO systems (system_id, name, constellation_id, region_id, frost_line, habitable_zone_inner, habitable_zone_outer, x, y, z,
+                                               star_age, star_luminosity, star_mass, star_metallicity, star_radius, star_spectral_class, star_temperature) 
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ''', (system_id, system_name, constellation_id, region_id, frost_line, habitable_zone_inner, habitable_zone_outer, x, y, z,
+                              star_age, star_luminosity, star_mass, star_metallicity, star_radius, star_spectral_class, star_temperature))
+                        system_count += 1
+                    except ValueError:
+                        continue
+        
+        conn.commit()
+        print(f"Inserted {system_count} systems from systems.json")
+    
+    # Fallback to solarsystemcontent.json if systems.json doesn't work
+    if system_count == 0:
+        print("No systems found in systems.json, trying solarsystemcontent.json...")
+        systems_path = phobos_path / 'fsd_binary_schema' / 'solarsystemcontent.json'
+        if not systems_path.exists():
+            raise FileNotFoundError(f"Systems file not found: {systems_path}")
+        
+        with open(systems_path, 'r', encoding='utf-8') as f:
+            systems_file_data = json.load(f)
+        
+        if 'Type: FSD Multi Index' in systems_file_data:
+            systems_data = systems_file_data['Type: FSD Multi Index']
+        else:
+            systems_data = systems_file_data
+        
+        processed_systems = set()
+        system_count = 0
+        
+        for system_dict in systems_data:
+            for system_id_str, system_entries in system_dict.items():
+                try:
+                    system_id = int(system_id_str)
+                    if system_id in processed_systems:
+                        continue
+                    processed_systems.add(system_id)
+                    
+                    # Handle both list and string entries
+                    if isinstance(system_entries, list):
+                        system_data = extract_fsd_dict_data(system_entries)
+                        constellation_id = system_data.get(f'{system_id}.constellationID')
+                        region_id = system_data.get(f'{system_id}.regionID')
+                        name_id = system_data.get(f'{system_id}.nameID')
+                        
+                        # Extract additional system data
+                        frost_line = system_data.get(f'{system_id}.frostLine')
+                        habitable_zone_raw = system_data.get(f'{system_id}.habitableZone')
+                        
+                        # Parse habitable zone data (could be string or list)
+                        habitable_zone_inner, habitable_zone_outer = None, None
+                        if isinstance(habitable_zone_raw, str):
+                            try:
+                                # Try to parse as Python literal (list)
+                                import ast
+                                habitable_zone = ast.literal_eval(habitable_zone_raw)
+                                if isinstance(habitable_zone, list) and len(habitable_zone) >= 2:
+                                    habitable_zone_inner, habitable_zone_outer = float(habitable_zone[0]), float(habitable_zone[1])
+                            except (ValueError, SyntaxError):
+                                pass
+                        elif isinstance(habitable_zone_raw, list) and len(habitable_zone_raw) >= 2:
+                            habitable_zone_inner, habitable_zone_outer = float(habitable_zone_raw[0]), float(habitable_zone_raw[1])
+                        
+                        # Extract 3D coordinates from center.vector_data
+                        center_data = system_data.get(f'{system_id}.center', [])
+                        x, y, z = None, None, None
+                        if len(center_data) >= 2 and isinstance(center_data[1], dict):
+                            vector_data = center_data[1].get('vector_data', [])
+                            if len(vector_data) >= 3:
+                                x, y, z = vector_data[0], vector_data[1], vector_data[2]
+                        
+                        # Convert nameID to int if it's a string
+                        if isinstance(name_id, str):
+                            try:
+                                name_id = int(name_id)
+                            except ValueError:
+                                name_id = None
+                        
+                        # Use nameID for localization lookup, fallback to system_id, then generic name
+                        if name_id and name_id in localization_names:
+                            system_name = localization_names[name_id]
+                        elif system_id in localization_names:
+                            system_name = localization_names[system_id]
+                        else:
+                            system_name = f'System {system_id}'
+                        
+                        # Get star statistics
+                        star_stats = star_statistics.get(system_id, {})
+                        star_age = _parse_float(star_stats.get('age'))
+                        star_luminosity = _parse_float(star_stats.get('luminosity'))
+                        star_mass = _parse_float(star_stats.get('mass'))
+                        star_metallicity = _parse_float(star_stats.get('metallicity'))
+                        star_radius = _parse_float(star_stats.get('radius'))
+                        star_spectral_class = star_stats.get('spectralClass')
+                        star_temperature = _parse_float(star_stats.get('temperature'))
+                        
+                        cursor.execute('''
+                            INSERT INTO systems (system_id, name, constellation_id, region_id, frost_line, habitable_zone_inner, habitable_zone_outer, x, y, z,
+                                               star_age, star_luminosity, star_mass, star_metallicity, star_radius, star_spectral_class, star_temperature) 
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ''', (system_id, system_name, constellation_id, region_id, frost_line, habitable_zone_inner, habitable_zone_outer, x, y, z,
+                              star_age, star_luminosity, star_mass, star_metallicity, star_radius, star_spectral_class, star_temperature))
+                        system_count += 1
+                    elif isinstance(system_entries, str):
+                        # String entries might just be system IDs, we still need the data
+                        # For now, insert with minimal info and get constellation/region from jumps data
+                        system_name = localization_names.get(system_id, f'System {system_id}')
+                        
+                        # Get star statistics
+                        star_stats = star_statistics.get(system_id, {})
+                        star_age = _parse_float(star_stats.get('age'))
+                        star_luminosity = _parse_float(star_stats.get('luminosity'))
+                        star_mass = _parse_float(star_stats.get('mass'))
+                        star_metallicity = _parse_float(star_stats.get('metallicity'))
+                        star_radius = _parse_float(star_stats.get('radius'))
+                        star_spectral_class = star_stats.get('spectralClass')
+                        star_temperature = _parse_float(star_stats.get('temperature'))
+                        
+                        cursor.execute('''
+                            INSERT INTO systems (system_id, name, constellation_id, region_id, frost_line, habitable_zone_inner, habitable_zone_outer, x, y, z,
+                                               star_age, star_luminosity, star_mass, star_metallicity, star_radius, star_spectral_class, star_temperature) 
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ''', (system_id, system_name, None, None, None, None, None, None, None, None,
+                              star_age, star_luminosity, star_mass, star_metallicity, star_radius, star_spectral_class, star_temperature))
+                        system_count += 1
+                except ValueError:
+                    continue
+        
+        conn.commit()
+        print(f"Inserted {system_count} systems from solarsystemcontent.json")
+    
+    # Extract jumps
+    print("Extracting jumps from stargate data...")
+    
+    # Load solarsystemcontent.json for jump data
+    systems_content_path = phobos_path / 'fsd_binary_schema' / 'solarsystemcontent.json'
+    if not systems_content_path.exists():
+        print("Warning: solarsystemcontent.json not found, skipping jump extraction")
+        return
+        
+    with open(systems_content_path, 'r', encoding='utf-8') as f:
+        systems_content_data = json.load(f)
+    
+    if 'Type: FSD Multi Index' in systems_content_data:
+        systems_data_for_jumps = systems_content_data['Type: FSD Multi Index']
+    else:
+        systems_data_for_jumps = systems_content_data
+    
+    # First pass: Build stargate-to-system mapping
+    stargate_to_system = {}
+    for system_dict in systems_data_for_jumps:
+        for system_id_str, system_entries in system_dict.items():
+            try:
+                system_id = int(system_id_str)
+            except ValueError:
+                continue
+            
+            if isinstance(system_entries, list):
+                system_data = extract_fsd_dict_data(system_entries)
+                stargates_data = system_data.get(f'{system_id}.stargates', [])
+                
+                for stargate_info in stargates_data:
+                    if isinstance(stargate_info, dict):
+                        for stargate_key in stargate_info.keys():
+                            if stargate_key.startswith('stargates.'):
+                                stargate_id = int(stargate_key.split('.')[-1])
+                                stargate_to_system[stargate_id] = system_id
+    
+    print(f"Found {len(stargate_to_system)} stargates")
+    
+    # Second pass: Extract jump connections
+    jumps = []
+    for system_dict in systems_data_for_jumps:
+        for system_id_str, system_entries in system_dict.items():
+            try:
+                system_id = int(system_id_str)
+            except ValueError:
+                continue
+            
+            if isinstance(system_entries, list):
+                system_data = extract_fsd_dict_data(system_entries)
+                stargates_data = system_data.get(f'{system_id}.stargates', [])
+                
+                for stargate_info in stargates_data:
+                    if isinstance(stargate_info, dict):
+                        for stargate_key, stargate_details in stargate_info.items():
+                            if isinstance(stargate_details, list):
+                                for detail_dict in stargate_details:
+                                    if isinstance(detail_dict, dict):
+                                        for detail_key, detail_value in detail_dict.items():
+                                            if '.destination' in detail_key:
+                                                try:
+                                                    dest_stargate_id = int(detail_value)
+                                                    dest_system_id = stargate_to_system.get(dest_stargate_id)
+                                                    if dest_system_id and dest_system_id != system_id:
+                                                        jumps.append((system_id, dest_system_id))
+                                                except ValueError:
+                                                    pass
+    
+    # Remove duplicates and insert
+    jumps = list(set(jumps))
+    print(f"Found {len(jumps)} jump connections")
+    
+    for from_sys, to_sys in jumps:
+        cursor.execute('INSERT OR IGNORE INTO jumps VALUES (?, ?)', (from_sys, to_sys))
+    
+    conn.commit()
+    
+    # Vacuum database
+    conn.execute('VACUUM')
+    conn.commit()
+    
+    # Show final statistics
+    cursor.execute('SELECT COUNT(*) FROM regions')
+    regions_count = cursor.fetchone()[0]
+    cursor.execute('SELECT COUNT(*) FROM constellations')  
+    constellations_count = cursor.fetchone()[0]
+    cursor.execute('SELECT COUNT(*) FROM systems')
+    systems_count = cursor.fetchone()[0]
+    cursor.execute('SELECT COUNT(*) FROM jumps')  
+    jumps_count = cursor.fetchone()[0]
+    
+    print(f"Successfully created database: {db_path}")
+    print("Database contains:")
+    print(f"  - {regions_count:,} regions")
+    print(f"  - {constellations_count:,} constellations")
+    print(f"  - {systems_count:,} systems")
+    print(f"  - {jumps_count:,} jump connections")
+    
+    conn.close()
+
+
+def run_simple_query(db_path: str, query: str):
+    """Run a simple query and display results."""
+    try:
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(query)
+            results = cursor.fetchall()
+            
+            if results:
+                print(f"\nQuery results ({len(results)} rows):")
+                for i, row in enumerate(results[:20]):  # Limit to first 20 results
+                    print(f"  {i+1}: {row}")
+                if len(results) > 20:
+                    print(f"  ... ({len(results) - 20} more rows)")
+            else:
+                print("\nQuery returned no results.")
+                
+    except Exception as e:
+        print(f"Query error: {e}")
+
+
+def main():
+    parser = argparse.ArgumentParser(description='Process Phobos EVE data into SQLite database')
+    parser.add_argument('--output', '-o', 
+                       default='eve_universe.db',
+                       help='Output SQLite database path (default: eve_universe.db)')
+    parser.add_argument('--phobos-output', '-p',
+                       default='./output',
+                       help='Path to Phobos output directory (default: ./output)')
+    parser.add_argument('--query', '-q',
+                       help='Run a simple query on the database after creation')
+    
+    args = parser.parse_args()
+    
+    # Verify Python version
+    if sys.version_info < (3, 7):
+        print("Error: This script requires Python 3.7 or higher")
+        sys.exit(1)
+    
+    # Verify phobos output directory exists
+    if not os.path.exists(args.phobos_output):
+        print(f"Error: Phobos output directory does not exist: {args.phobos_output}")
+        sys.exit(1)
+    
+    try:
+        process_eve_data(args.phobos_output, args.output)
+        
+        # Run query if specified
+        if args.query:
+            run_simple_query(args.output, args.query)
+        
+        print("\nProcessing complete!")
+        print("\nYou can now query the database with tools like sqlite3 or DB Browser for SQLite.")
+        print("Example queries:")
+        print("  SELECT name FROM systems LIMIT 10;")
+        print("  SELECT r.name as region, COUNT(s.system_id) as system_count")
+        print("    FROM regions r JOIN systems s ON r.region_id = s.region_id GROUP BY r.name;")
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+
+
+if __name__ == '__main__':
+    main()

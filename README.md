@@ -28,6 +28,85 @@ It doesn't mean that you should not use these miners. Generally speaking, if you
 
     $ python run.py --eve=E:\eve\client\ --json=~\Desktop\phobos_tq_en-us --list="evetypes, marketgroups, metadata"
 
+## EVE Universe Database Generator
+
+The `generate.py` script extracts EVE universe data from Phobos output and creates a normalized SQLite database with systems, constellations, regions, and jump connections. This is particularly useful for creating navigation tools, route planners, and universe analysis applications for EVE Frontier.
+
+### Requirements for generate.py
+
+* Phobos output files (run the main extraction first)
+* Python 3.7+ (no additional dependencies required)
+
+### Usage
+
+First, run Phobos to extract the raw EVE client data:
+
+    $ python run.py --eve="C:\CCP\EVE Frontier" --json=output --translate=multi
+
+Then use the generated output to create the universe database:
+
+    $ python generate.py --output eve_universe.db --phobos-output ./output
+
+### Arguments for generate.py
+
+* `--output` or `-o`: Optional. Output SQLite database path (default: `eve_universe.db`)
+* `--phobos-output` or `-p`: Optional. Path to Phobos output directory (default: `./output`)
+* `--query` or `-q`: Optional. Run a simple query on the database after creation
+
+### Examples
+
+Create a database with default settings:
+
+    $ python generate.py
+
+Create a database with custom paths:
+
+    $ python generate.py --output frontier_universe.db --phobos-output ./phobos_data
+
+Create database and run a query:
+
+    $ python generate.py --query "SELECT COUNT(*) FROM systems"
+
+### Database Schema
+
+The generated SQLite database contains the following tables:
+
+* **systems**: Solar systems with coordinates, security status, constellation/region links
+* **constellations**: Constellation data with region links  
+* **regions**: Region data with coordinates
+* **jumps**: Stargate connections between systems (bidirectional)
+
+### Sample Queries
+
+Show systems with their jump connections:
+```sql
+SELECT s.name, COUNT(j.to_system_id) as connections 
+FROM systems s 
+LEFT JOIN jumps j ON s.system_id = j.from_system_id 
+GROUP BY s.system_id 
+ORDER BY connections DESC 
+LIMIT 10;
+```
+
+Find route between systems (basic):
+```sql
+WITH RECURSIVE route(system_id, path, hops) AS (
+  SELECT 30000001, '30000001', 0
+  UNION
+  SELECT j.to_system_id, path || '->' || j.to_system_id, hops + 1
+  FROM route r, jumps j 
+  WHERE r.system_id = j.from_system_id AND hops < 5 AND j.to_system_id = 30000002
+)
+SELECT * FROM route WHERE system_id = 30000002;
+```
+
+### Performance
+
+The script processes approximately:
+- 24,000+ systems from EVE Frontier universe data
+- 7,000+ stargate connections 
+- Complete extraction typically takes 10-30 seconds
+
 ### Phobos-specific data
 Besides raw data Phobos pulls from client, it provides two custom containers.
 

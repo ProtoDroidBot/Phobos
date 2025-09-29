@@ -763,6 +763,19 @@ def process_eve_data(phobos_output_dir: str, db_path: str) -> None:
                                         position = [None, None, None]
                                         radius = None
                                         type_id = None
+                                        celestial_index = None
+                                        density = None
+                                        eccentricity = None
+                                        escape_velocity = None
+                                        surface_gravity = None
+                                        temperature = None
+                                        pressure = None
+                                        orbit_radius = None
+                                        orbit_period = None
+                                        rotation_rate = None
+                                        mass = None
+                                        spectral_class = None
+                                        type_description = None
                                         
                                         if isinstance(planet_details, list):
                                             for detail in planet_details:
@@ -777,12 +790,42 @@ def process_eve_data(phobos_output_dir: str, db_path: str) -> None:
                                                             radius = _parse_float(detail_value)
                                                         elif detail_key == f'{planet_id}.typeID':
                                                             type_id = _parse_float(detail_value)
+                                                        elif detail_key == f'{planet_id}.celestialIndex':
+                                                            celestial_index = _parse_float(detail_value)
+                                                        elif detail_key == f'{planet_id}.density':
+                                                            density = _parse_float(detail_value)
+                                                        elif detail_key == f'{planet_id}.eccentricity':
+                                                            eccentricity = _parse_float(detail_value)
+                                                        elif detail_key == f'{planet_id}.escapeVelocity':
+                                                            escape_velocity = _parse_float(detail_value)
+                                                        elif detail_key == f'{planet_id}.surfaceGravity':
+                                                            surface_gravity = _parse_float(detail_value)
+                                                        elif detail_key == f'{planet_id}.temperature':
+                                                            temperature = _parse_float(detail_value)
+                                                        elif detail_key == f'{planet_id}.pressure':
+                                                            pressure = _parse_float(detail_value)
+                                                        elif detail_key == f'{planet_id}.orbitRadius':
+                                                            orbit_radius = _parse_float(detail_value)
+                                                        elif detail_key == f'{planet_id}.orbitPeriod':
+                                                            orbit_period = _parse_float(detail_value)
+                                                        elif detail_key == f'{planet_id}.rotationRate':
+                                                            rotation_rate = _parse_float(detail_value)
+                                                        elif detail_key == f'{planet_id}.mass':
+                                                            mass = _parse_float(detail_value)
+                                                        elif detail_key == f'{planet_id}.spectralClass':
+                                                            spectral_class = str(detail_value) if detail_value else None
+                                                        elif detail_key == f'{planet_id}.typeDescription':
+                                                            type_description = str(detail_value) if detail_value else None
                                         
-                                        # Insert planet with basic data
+                                        # Insert planet with complete data
                                         cursor.execute('''
-                                            INSERT OR IGNORE INTO Planets (planetId, name, solarSystemId, typeId, centerX, centerY, centerZ, radius)
-                                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                                        ''', (planet_id, planet_name, system_id, type_id, position[0], position[1], position[2], radius))
+                                            INSERT OR IGNORE INTO Planets (planetId, name, solarSystemId, celestialIndex, typeId, centerX, centerY, centerZ, radius,
+                                                                          density, eccentricity, escapeVelocity, surfaceGravity, temperature, pressure,
+                                                                          orbitRadius, orbitPeriod, rotationRate, mass, spectralClass, typeDescription)
+                                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                        ''', (planet_id, planet_name, system_id, celestial_index, type_id, position[0], position[1], position[2], radius,
+                                              density, eccentricity, escape_velocity, surface_gravity, temperature, pressure,
+                                              orbit_radius, orbit_period, rotation_rate, mass, spectral_class, type_description))
                                         planet_count += 1
                                         
                                         # Extract moons and stations for this planet

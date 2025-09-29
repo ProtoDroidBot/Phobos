@@ -724,6 +724,12 @@ def process_eve_data(phobos_output_dir: str, db_path: str) -> None:
     moon_count = 0
     station_count = 0
     
+    # Create a lookup for system names (needed for proper planet/moon naming)
+    system_names = {}
+    cursor.execute("SELECT solarSystemId, name FROM SolarSystems")
+    for sys_id, sys_name in cursor.fetchall():
+        system_names[sys_id] = sys_name
+    
     # Load solarsystemcontent.json for celestial objects data
     systems_content_path = phobos_path / 'fsd_binary_schema' / 'solarsystemcontent.json'
     if not systems_content_path.exists():
@@ -756,9 +762,11 @@ def process_eve_data(phobos_output_dir: str, db_path: str) -> None:
                                 if planet_key.startswith('planets.'):
                                     try:
                                         planet_id = int(planet_key.split('.')[-1])
-                                        planet_name = localization_names.get(planet_id, f'Planet {planet_id}')
                                         
-                                        # Extract basic planet data
+                                        # Get system name for proper planet naming
+                                        system_name = system_names.get(system_id, f'System {system_id}')
+                                        
+                                        # Extract basic planet data (especially celestialIndex for naming)
                                         position = [None, None, None]
                                         radius = None
                                         type_id = None
@@ -774,6 +782,21 @@ def process_eve_data(phobos_output_dir: str, db_path: str) -> None:
                                         rotation_rate = None
                                         mass = None
                                         type_description = None
+                                        
+                                        # First pass: extract celestialIndex for proper naming
+                                        if isinstance(planet_details, list):
+                                            for detail in planet_details:
+                                                if isinstance(detail, dict):
+                                                    for detail_key, detail_value in detail.items():
+                                                        if detail_key == f'{planet_id}.celestialIndex':
+                                                            celestial_index = _parse_float(detail_value)
+                                                            break
+                                        
+                                        # Generate proper planet name: "SystemName - Planet X"
+                                        if celestial_index:
+                                            planet_name = f"{system_name} - Planet {int(celestial_index)}"
+                                        else:
+                                            planet_name = f"{system_name} - Planet {planet_id}"
                                         
                                         if isinstance(planet_details, list):
                                             for detail in planet_details:
@@ -842,6 +865,7 @@ def process_eve_data(phobos_output_dir: str, db_path: str) -> None:
                                         
                                         # Extract moons and stations for this planet
                                         if isinstance(planet_details, list):
+                                            moon_sequence = 0  # Track moon sequence within this planet
                                             for detail in planet_details:
                                                 if isinstance(detail, dict):
                                                     for detail_key, detail_value in detail.items():
@@ -853,7 +877,11 @@ def process_eve_data(phobos_output_dir: str, db_path: str) -> None:
                                                                         if moon_key.startswith('moons.'):
                                                                             try:
                                                                                 moon_id = int(moon_key.split('.')[-1])
-                                                                                moon_name = localization_names.get(moon_id, f'Moon {moon_id}')
+                                                                                moon_sequence += 1  # Increment for each moon in this planet
+                                                                                
+                                                                                # Generate proper moon name: "SystemName - Planet X - Moon Y"
+                                                                                planet_number = int(celestial_index) if celestial_index else planet_id
+                                                                                moon_name = f"{system_name} - Planet {planet_number} - Moon {moon_sequence}"
                                                                                 
                                                                                 # Extract moon data
                                                                                 moon_position = [None, None, None]

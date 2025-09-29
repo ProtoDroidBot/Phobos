@@ -106,13 +106,11 @@ def create_database_schema(conn: sqlite3.Connection) -> None:
         CREATE TABLE SolarSystems (
             solarSystemId INTEGER PRIMARY KEY,
             name TEXT,
-            nameTypeId INTEGER,
             constellationId INTEGER,
             regionId INTEGER,
             centerX REAL,
             centerY REAL,
             centerZ REAL,
-            sunTypeId INTEGER,
             frost_line REAL,
             habitable_zone_inner REAL,
             habitable_zone_outer REAL,
@@ -126,9 +124,7 @@ def create_database_schema(conn: sqlite3.Connection) -> None:
             FOREIGN KEY (constellationId) REFERENCES Constellations (constellationId),
             FOREIGN KEY (regionId) REFERENCES Regions (regionId)
         )
-    ''')
-    
-    # Jumps table
+    ''')    # Jumps table
     cursor.execute('''
         CREATE TABLE Jumps (
             fromSystemId INTEGER,
@@ -515,11 +511,11 @@ def process_eve_data(phobos_output_dir: str, db_path: str) -> None:
                             star_temperature = _parse_float(star_stats.get('temperature'))
                             
                             cursor.execute('''
-                                INSERT OR IGNORE INTO SolarSystems (solarSystemId, name, nameTypeId, constellationId, regionId, centerX, centerY, centerZ, sunTypeId,
+                                INSERT OR IGNORE INTO SolarSystems (solarSystemId, name, constellationId, regionId, centerX, centerY, centerZ,
                                                          frost_line, habitable_zone_inner, habitable_zone_outer, star_age, star_luminosity, star_mass, 
                                                          star_metallicity, star_radius, star_spectral_class, star_temperature) 
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                            ''', (system_id, system_name, None, constellation_id, region_id, x, y, z, None,
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            ''', (system_id, system_name, constellation_id, region_id, x, y, z,
                                   frost_line, habitable_zone_inner, habitable_zone_outer, star_age, star_luminosity, star_mass, star_metallicity, star_radius, star_spectral_class, star_temperature))
                             system_count += 1
                         except ValueError:
@@ -591,10 +587,10 @@ def process_eve_data(phobos_output_dir: str, db_path: str) -> None:
                         star_temperature = _parse_float(star_stats.get('temperature'))
                         
                         cursor.execute('''
-                            INSERT OR IGNORE INTO SolarSystems (solarSystemId, name, nameTypeId, constellationId, regionId, centerX, centerY, centerZ, sunTypeId, frost_line, habitable_zone_inner, habitable_zone_outer,
+                            INSERT OR IGNORE INTO SolarSystems (solarSystemId, name, constellationId, regionId, centerX, centerY, centerZ, frost_line, habitable_zone_inner, habitable_zone_outer,
                                                star_age, star_luminosity, star_mass, star_metallicity, star_radius, star_spectral_class, star_temperature) 
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        ''', (system_id, system_name, None, constellation_id, region_id, x, y, z, None, frost_line, habitable_zone_inner, habitable_zone_outer,
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ''', (system_id, system_name, constellation_id, region_id, x, y, z, frost_line, habitable_zone_inner, habitable_zone_outer,
                               star_age, star_luminosity, star_mass, star_metallicity, star_radius, star_spectral_class, star_temperature))
                         system_count += 1
                     except ValueError:
@@ -688,10 +684,10 @@ def process_eve_data(phobos_output_dir: str, db_path: str) -> None:
                         star_temperature = _parse_float(star_stats.get('temperature'))
                         
                         cursor.execute('''
-                            INSERT OR IGNORE INTO SolarSystems (solarSystemId, name, nameTypeId, constellationId, regionId, centerX, centerY, centerZ, sunTypeId, frost_line, habitable_zone_inner, habitable_zone_outer,
+                            INSERT OR IGNORE INTO SolarSystems (solarSystemId, name, constellationId, regionId, centerX, centerY, centerZ, frost_line, habitable_zone_inner, habitable_zone_outer,
                                                star_age, star_luminosity, star_mass, star_metallicity, star_radius, star_spectral_class, star_temperature) 
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        ''', (system_id, system_name, None, constellation_id, region_id, x, y, z, None, frost_line, habitable_zone_inner, habitable_zone_outer,
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ''', (system_id, system_name, constellation_id, region_id, x, y, z, frost_line, habitable_zone_inner, habitable_zone_outer,
                               star_age, star_luminosity, star_mass, star_metallicity, star_radius, star_spectral_class, star_temperature))
                         system_count += 1
                     elif isinstance(system_entries, str):
@@ -710,10 +706,10 @@ def process_eve_data(phobos_output_dir: str, db_path: str) -> None:
                         star_temperature = _parse_float(star_stats.get('temperature'))
                         
                         cursor.execute('''
-                            INSERT OR IGNORE INTO SolarSystems (solarSystemId, name, nameTypeId, constellationId, regionId, centerX, centerY, centerZ, sunTypeId, frost_line, habitable_zone_inner, habitable_zone_outer,
+                            INSERT OR IGNORE INTO SolarSystems (solarSystemId, name, constellationId, regionId, centerX, centerY, centerZ, frost_line, habitable_zone_inner, habitable_zone_outer,
                                                star_age, star_luminosity, star_mass, star_metallicity, star_radius, star_spectral_class, star_temperature) 
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        ''', (system_id, system_name, None, None, None, None, None, None, None, None,
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ''', (system_id, system_name, None, None, None, None, None, None,
                               star_age, star_luminosity, star_mass, star_metallicity, star_radius, star_spectral_class, star_temperature))
                         system_count += 1
                 except ValueError:

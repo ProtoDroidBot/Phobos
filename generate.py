@@ -73,6 +73,9 @@ def create_database_schema(conn: sqlite3.Connection) -> None:
     cursor.execute('DROP TABLE IF EXISTS Constellations')
     cursor.execute('DROP TABLE IF EXISTS Regions')
     cursor.execute('DROP TABLE IF EXISTS Jumps')
+    cursor.execute('DROP TABLE IF EXISTS Planets')
+    cursor.execute('DROP TABLE IF EXISTS Moons')
+    cursor.execute('DROP TABLE IF EXISTS NpcStations')
     
     # Regions table
     cursor.execute('''
@@ -140,6 +143,86 @@ def create_database_schema(conn: sqlite3.Connection) -> None:
             PRIMARY KEY (fromSystemId, toSystemId),
             FOREIGN KEY (fromSystemId) REFERENCES SolarSystems (solarSystemId),
             FOREIGN KEY (toSystemId) REFERENCES SolarSystems (solarSystemId)
+        )
+    ''')
+    
+    # Planets table
+    cursor.execute('''
+        CREATE TABLE Planets (
+            planetId INTEGER PRIMARY KEY,
+            name TEXT,
+            solarSystemId INTEGER,
+            celestialIndex INTEGER,
+            typeId INTEGER,
+            centerX REAL,
+            centerY REAL,
+            centerZ REAL,
+            radius REAL,
+            density REAL,
+            eccentricity REAL,
+            escapeVelocity REAL,
+            surfaceGravity REAL,
+            temperature REAL,
+            pressure REAL,
+            orbitRadius REAL,
+            orbitPeriod REAL,
+            rotationRate REAL,
+            mass REAL,
+            spectralClass TEXT,
+            typeDescription TEXT,
+            FOREIGN KEY (solarSystemId) REFERENCES SolarSystems (solarSystemId)
+        )
+    ''')
+    
+    # Moons table
+    cursor.execute('''
+        CREATE TABLE Moons (
+            moonId INTEGER PRIMARY KEY,
+            name TEXT,
+            planetId INTEGER,
+            solarSystemId INTEGER,
+            typeId INTEGER,
+            centerX REAL,
+            centerY REAL,
+            centerZ REAL,
+            radius REAL,
+            density REAL,
+            eccentricity REAL,
+            escapeVelocity REAL,
+            surfaceGravity REAL,
+            temperature REAL,
+            pressure REAL,
+            orbitRadius REAL,
+            orbitPeriod REAL,
+            rotationRate REAL,
+            mass REAL,
+            spectralClass TEXT,
+            typeDescription TEXT,
+            FOREIGN KEY (planetId) REFERENCES Planets (planetId),
+            FOREIGN KEY (solarSystemId) REFERENCES SolarSystems (solarSystemId)
+        )
+    ''')
+    
+    # NPC Stations table
+    cursor.execute('''
+        CREATE TABLE NpcStations (
+            stationId INTEGER PRIMARY KEY,
+            name TEXT,
+            solarSystemId INTEGER,
+            planetId INTEGER,
+            typeId INTEGER,
+            ownerId INTEGER,
+            centerX REAL,
+            centerY REAL,
+            centerZ REAL,
+            lagrangePoint INTEGER,
+            orbitId INTEGER,
+            operationId INTEGER,
+            isConquerable BOOLEAN,
+            reprocessingEfficiency REAL,
+            reprocessingStationsTake REAL,
+            FOREIGN KEY (solarSystemId) REFERENCES SolarSystems (solarSystemId),
+            FOREIGN KEY (planetId) REFERENCES Planets (planetId)
         )
     ''')
     
@@ -608,6 +691,79 @@ def process_eve_data(phobos_output_dir: str, db_path: str) -> None:
         conn.commit()
         print(f"Inserted {system_count} systems from solarsystemcontent.json")
     
+    # Extract celestial objects (planets, moons, NPC stations)
+    print("Extracting celestial objects (planets, moons, stations)...")
+    
+    planet_count = 0
+    moon_count = 0
+    station_count = 0
+    
+    # Load solarsystemcontent.json for celestial objects data
+    systems_content_path = phobos_path / 'fsd_binary_schema' / 'solarsystemcontent.json'
+    if not systems_content_path.exists():
+        print("Warning: solarsystemcontent.json not found, skipping celestial objects extraction")
+    else:
+        with open(systems_content_path, 'r', encoding='utf-8') as f:
+            systems_content_data = json.load(f)
+        
+        if 'Type: FSD Multi Index' in systems_content_data:
+            systems_data_for_celestials = systems_content_data['Type: FSD Multi Index']
+        else:
+            systems_data_for_celestials = systems_content_data
+        
+        # Process celestial objects - simplified version for now
+        for system_dict in systems_data_for_celestials:
+            for system_id_str, system_entries in system_dict.items():
+                try:
+                    system_id = int(system_id_str)
+                except ValueError:
+                    continue
+                
+                if isinstance(system_entries, list):
+                    system_data = extract_fsd_dict_data(system_entries)
+                    planets_data = system_data.get(f'{system_id}.planets', [])
+                    
+                    # Extract basic planet information
+                    for planet_info in planets_data:
+                        if isinstance(planet_info, dict):
+                            for planet_key, planet_details in planet_info.items():
+                                if planet_key.startswith('planets.'):
+                                    try:
+                                        planet_id = int(planet_key.split('.')[-1])
+                                        planet_name = localization_names.get(planet_id, f'Planet {planet_id}')
+                                        
+                                        # Extract basic planet data
+                                        position = [None, None, None]
+                                        radius = None
+                                        type_id = None
+                                        
+                                        if isinstance(planet_details, list):
+                                            for detail in planet_details:
+                                                if isinstance(detail, dict):
+                                                    for detail_key, detail_value in detail.items():
+                                                        if detail_key == f'{planet_id}.position':
+                                                            if isinstance(detail_value, list) and len(detail_value) >= 2:
+                                                                vector_data = detail_value[1].get('vector_data', [])
+                                                                if len(vector_data) >= 3:
+                                                                    position = vector_data[:3]
+                                                        elif detail_key == f'{planet_id}.radius':
+                                                            radius = _parse_float(detail_value)
+                                                        elif detail_key == f'{planet_id}.typeID':
+                                                            type_id = _parse_float(detail_value)
+                                        
+                                        # Insert planet with basic data
+                                        cursor.execute('''
+                                            INSERT OR IGNORE INTO Planets (planetId, name, solarSystemId, typeId, centerX, centerY, centerZ, radius)
+                                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                                        ''', (planet_id, planet_name, system_id, type_id, position[0], position[1], position[2], radius))
+                                        planet_count += 1
+                                        
+                                    except ValueError:
+                                        continue
+    
+    conn.commit()
+    print(f"Inserted {planet_count} planets, {moon_count} moons, and {station_count} NPC stations")
+    
     # Extract jumps
     print("Extracting jumps from stargate data...")
     
@@ -699,6 +855,12 @@ def process_eve_data(phobos_output_dir: str, db_path: str) -> None:
     systems_count = cursor.fetchone()[0]
     cursor.execute('SELECT COUNT(*) FROM Jumps')  
     jumps_count = cursor.fetchone()[0]
+    cursor.execute('SELECT COUNT(*) FROM Planets')  
+    planets_count = cursor.fetchone()[0]
+    cursor.execute('SELECT COUNT(*) FROM Moons')  
+    moons_count = cursor.fetchone()[0]
+    cursor.execute('SELECT COUNT(*) FROM NpcStations')  
+    stations_count = cursor.fetchone()[0]
     
     print(f"Successfully created database: {db_path}")
     print("Database contains:")
@@ -706,6 +868,9 @@ def process_eve_data(phobos_output_dir: str, db_path: str) -> None:
     print(f"  - {constellations_count:,} constellations")
     print(f"  - {systems_count:,} systems")
     print(f"  - {jumps_count:,} jump connections")
+    print(f"  - {planets_count:,} planets")
+    print(f"  - {moons_count:,} moons")
+    print(f"  - {stations_count:,} NPC stations")
     
     conn.close()
 

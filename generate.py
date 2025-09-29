@@ -164,7 +164,6 @@ def create_database_schema(conn: sqlite3.Connection) -> None:
             orbitPeriod REAL,
             rotationRate REAL,
             mass REAL,
-            spectralClass TEXT,
             typeDescription TEXT,
             FOREIGN KEY (solarSystemId) REFERENCES SolarSystems (solarSystemId)
         )
@@ -774,7 +773,6 @@ def process_eve_data(phobos_output_dir: str, db_path: str) -> None:
                                         orbit_period = None
                                         rotation_rate = None
                                         mass = None
-                                        spectral_class = None
                                         type_description = None
                                         
                                         if isinstance(planet_details, list):
@@ -828,8 +826,6 @@ def process_eve_data(phobos_output_dir: str, db_path: str) -> None:
                                                                                         mass += mass_gas  # Add gas to dust
                                                                                     else:
                                                                                         mass = mass_gas
-                                                                            elif stat_key == 'statistics.spectralClass':
-                                                                                spectral_class = str(stat_value) if stat_value else None
                                                                             elif stat_key == 'statistics.typeDescription':
                                                                                 type_description = str(stat_value) if stat_value else None
                                         
@@ -837,11 +833,11 @@ def process_eve_data(phobos_output_dir: str, db_path: str) -> None:
                                         cursor.execute('''
                                             INSERT OR IGNORE INTO Planets (planetId, name, solarSystemId, celestialIndex, typeId, centerX, centerY, centerZ, radius,
                                                                           density, eccentricity, escapeVelocity, surfaceGravity, temperature, pressure,
-                                                                          orbitRadius, orbitPeriod, rotationRate, mass, spectralClass, typeDescription)
-                                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                                                          orbitRadius, orbitPeriod, rotationRate, mass, typeDescription)
+                                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                                         ''', (planet_id, planet_name, system_id, celestial_index, type_id, position[0], position[1], position[2], radius,
                                               density, eccentricity, escape_velocity, surface_gravity, temperature, pressure,
-                                              orbit_radius, orbit_period, rotation_rate, mass, spectral_class, type_description))
+                                              orbit_radius, orbit_period, rotation_rate, mass, type_description))
                                         planet_count += 1
                                         
                                         # Extract moons and stations for this planet

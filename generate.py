@@ -792,30 +792,46 @@ def process_eve_data(phobos_output_dir: str, db_path: str) -> None:
                                                             type_id = _parse_float(detail_value)
                                                         elif detail_key == f'{planet_id}.celestialIndex':
                                                             celestial_index = _parse_float(detail_value)
-                                                        elif detail_key == f'{planet_id}.density':
-                                                            density = _parse_float(detail_value)
-                                                        elif detail_key == f'{planet_id}.eccentricity':
-                                                            eccentricity = _parse_float(detail_value)
-                                                        elif detail_key == f'{planet_id}.escapeVelocity':
-                                                            escape_velocity = _parse_float(detail_value)
-                                                        elif detail_key == f'{planet_id}.surfaceGravity':
-                                                            surface_gravity = _parse_float(detail_value)
-                                                        elif detail_key == f'{planet_id}.temperature':
-                                                            temperature = _parse_float(detail_value)
-                                                        elif detail_key == f'{planet_id}.pressure':
-                                                            pressure = _parse_float(detail_value)
-                                                        elif detail_key == f'{planet_id}.orbitRadius':
-                                                            orbit_radius = _parse_float(detail_value)
-                                                        elif detail_key == f'{planet_id}.orbitPeriod':
-                                                            orbit_period = _parse_float(detail_value)
-                                                        elif detail_key == f'{planet_id}.rotationRate':
-                                                            rotation_rate = _parse_float(detail_value)
-                                                        elif detail_key == f'{planet_id}.mass':
-                                                            mass = _parse_float(detail_value)
-                                                        elif detail_key == f'{planet_id}.spectralClass':
-                                                            spectral_class = str(detail_value) if detail_value else None
-                                                        elif detail_key == f'{planet_id}.typeDescription':
-                                                            type_description = str(detail_value) if detail_value else None
+                                                        elif detail_key == f'{planet_id}.statistics':
+                                                            # Extract detailed statistics from the statistics object
+                                                            if isinstance(detail_value, list):
+                                                                for stat_entry in detail_value:
+                                                                    if isinstance(stat_entry, dict):
+                                                                        for stat_key, stat_value in stat_entry.items():
+                                                                            if stat_key == 'statistics.density':
+                                                                                density = _parse_float(stat_value)
+                                                                            elif stat_key == 'statistics.eccentricity':
+                                                                                eccentricity = _parse_float(stat_value)
+                                                                            elif stat_key == 'statistics.escapeVelocity':
+                                                                                escape_velocity = _parse_float(stat_value)
+                                                                            elif stat_key == 'statistics.surfaceGravity':
+                                                                                surface_gravity = _parse_float(stat_value)
+                                                                            elif stat_key == 'statistics.temperature':
+                                                                                temperature = _parse_float(stat_value)
+                                                                            elif stat_key == 'statistics.pressure':
+                                                                                pressure = _parse_float(stat_value)
+                                                                            elif stat_key == 'statistics.orbitRadius':
+                                                                                orbit_radius = _parse_float(stat_value)
+                                                                            elif stat_key == 'statistics.orbitPeriod':
+                                                                                orbit_period = _parse_float(stat_value)
+                                                                            elif stat_key == 'statistics.rotationRate':
+                                                                                rotation_rate = _parse_float(stat_value)
+                                                                            elif stat_key == 'statistics.massDust':
+                                                                                # Calculate total mass from dust + gas
+                                                                                mass_dust = _parse_float(stat_value)
+                                                                                if mass_dust and mass is None:
+                                                                                    mass = mass_dust
+                                                                            elif stat_key == 'statistics.massGas':
+                                                                                mass_gas = _parse_float(stat_value)
+                                                                                if mass_gas:
+                                                                                    if mass:
+                                                                                        mass += mass_gas  # Add gas to dust
+                                                                                    else:
+                                                                                        mass = mass_gas
+                                                                            elif stat_key == 'statistics.spectralClass':
+                                                                                spectral_class = str(stat_value) if stat_value else None
+                                                                            elif stat_key == 'statistics.typeDescription':
+                                                                                type_description = str(stat_value) if stat_value else None
                                         
                                         # Insert planet with complete data
                                         cursor.execute('''

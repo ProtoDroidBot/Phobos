@@ -263,6 +263,39 @@ def process_eve_data(phobos_output_dir: str, db_path: str) -> None:
     create_database_schema(conn)
     cursor = conn.cursor()
     
+    # Helper functions for data parsing
+    def _parse_float(value):
+        """Safely parse float value from FSD data"""
+        if value is None:
+            return None
+        if isinstance(value, (int, float)):
+            return float(value)
+        try:
+            return float(value)
+        except (ValueError, TypeError):
+            return None
+    
+    def _parse_bool(value):
+        """Safely parse boolean value from FSD data"""
+        if value is None:
+            return None
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return bool(value)
+        if isinstance(value, str):
+            return value.lower() in ('true', '1', 'yes')
+        return None
+    
+    # Initialize counters
+    region_count = 0
+    constellation_count = 0
+    system_count = 0
+    jump_count = 0
+    planet_count = 0
+    moon_count = 0
+    station_count = 0
+    
     # Load regions
     print("Loading regions...")
     regions_path = phobos_path / 'fsd_binary_schema' / 'regions.json'
@@ -271,8 +304,6 @@ def process_eve_data(phobos_output_dir: str, db_path: str) -> None:
     
     with open(regions_path, 'r', encoding='utf-8') as f:
         regions_data = json.load(f)
-    
-    region_count = 0
     for entry in regions_data:
         for fsd_key, fsd_data in entry.items():
             if fsd_key.startswith('FSD_DICT.'):
@@ -757,6 +788,114 @@ def process_eve_data(phobos_output_dir: str, db_path: str) -> None:
                                             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                                         ''', (planet_id, planet_name, system_id, type_id, position[0], position[1], position[2], radius))
                                         planet_count += 1
+                                        
+                                        # Extract moons and stations for this planet
+                                        if isinstance(planet_details, list):
+                                            for detail in planet_details:
+                                                if isinstance(detail, dict):
+                                                    for detail_key, detail_value in detail.items():
+                                                        # Extract moons
+                                                        if detail_key == f'{planet_id}.moons' and isinstance(detail_value, list):
+                                                            for moon_info in detail_value:
+                                                                if isinstance(moon_info, dict):
+                                                                    for moon_key, moon_details in moon_info.items():
+                                                                        if moon_key.startswith('moons.'):
+                                                                            try:
+                                                                                moon_id = int(moon_key.split('.')[-1])
+                                                                                moon_name = localization_names.get(moon_id, f'Moon {moon_id}')
+                                                                                
+                                                                                # Extract moon data
+                                                                                moon_position = [None, None, None]
+                                                                                moon_radius = None
+                                                                                moon_type_id = None
+                                                                                
+                                                                                if isinstance(moon_details, list):
+                                                                                    for moon_detail in moon_details:
+                                                                                        if isinstance(moon_detail, dict):
+                                                                                            for moon_detail_key, moon_detail_value in moon_detail.items():
+                                                                                                if moon_detail_key == f'{moon_id}.position':
+                                                                                                    if isinstance(moon_detail_value, list) and len(moon_detail_value) >= 2:
+                                                                                                        vector_data = moon_detail_value[1].get('vector_data', [])
+                                                                                                        if len(vector_data) >= 3:
+                                                                                                            moon_position = vector_data[:3]
+                                                                                                elif moon_detail_key == f'{moon_id}.radius':
+                                                                                                    moon_radius = _parse_float(moon_detail_value)
+                                                                                
+                                                                                # Insert moon
+                                                                                cursor.execute('''
+                                                                                    INSERT OR IGNORE INTO Moons (moonId, name, planetId, solarSystemId, typeId, centerX, centerY, centerZ, radius)
+                                                                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                                                                ''', (moon_id, moon_name, planet_id, system_id, moon_type_id, 
+                                                                                      moon_position[0], moon_position[1], moon_position[2], moon_radius))
+                                                                                moon_count += 1
+                                                                            except ValueError:
+                                                                                continue
+                                                        
+                                                        # Extract NPC stations
+                                                        elif detail_key == f'{planet_id}.npcStations' and isinstance(detail_value, list):
+                                                            for station_info in detail_value:
+                                                                if isinstance(station_info, dict):
+                                                                    for station_key, station_details in station_info.items():
+                                                                        if station_key.startswith('npcStations.'):
+                                                                            try:
+                                                                                station_id = int(station_key.split('.')[-1])
+                                                                                
+                                                                                # Extract station data
+                                                                                station_name = None
+                                                                                station_type_id = None
+                                                                                station_owner_id = None
+                                                                                station_position = [None, None, None]
+                                                                                lagrange_point = None
+                                                                                orbit_id = None
+                                                                                operation_id = None
+                                                                                is_conquerable = None
+                                                                                reprocessing_efficiency = None
+                                                                                reprocessing_stations_take = None
+                                                                                
+                                                                                if isinstance(station_details, list):
+                                                                                    for station_detail in station_details:
+                                                                                        if isinstance(station_detail, dict):
+                                                                                            for station_detail_key, station_detail_value in station_detail.items():
+                                                                                                if station_detail_key == f'{station_id}.stationName':
+                                                                                                    station_name = str(station_detail_value) if station_detail_value else None
+                                                                                                elif station_detail_key == f'{station_id}.typeID':
+                                                                                                    station_type_id = _parse_float(station_detail_value)
+                                                                                                elif station_detail_key == f'{station_id}.ownerID':
+                                                                                                    station_owner_id = _parse_float(station_detail_value)
+                                                                                                elif station_detail_key == f'{station_id}.position':
+                                                                                                    if isinstance(station_detail_value, list) and len(station_detail_value) >= 2:
+                                                                                                        vector_data = station_detail_value[1].get('vector_data', [])
+                                                                                                        if len(vector_data) >= 3:
+                                                                                                            station_position = vector_data[:3]
+                                                                                                elif station_detail_key == f'{station_id}.lagrangePoint':
+                                                                                                    lagrange_point = _parse_float(station_detail_value)
+                                                                                                elif station_detail_key == f'{station_id}.orbitID':
+                                                                                                    orbit_id = _parse_float(station_detail_value)
+                                                                                                elif station_detail_key == f'{station_id}.operationID':
+                                                                                                    operation_id = _parse_float(station_detail_value)
+                                                                                                elif station_detail_key == f'{station_id}.isConquerable':
+                                                                                                    is_conquerable = _parse_bool(station_detail_value)
+                                                                                                elif station_detail_key == f'{station_id}.reprocessingEfficiency':
+                                                                                                    reprocessing_efficiency = _parse_float(station_detail_value)
+                                                                                                elif station_detail_key == f'{station_id}.reprocessingStationsTake':
+                                                                                                    reprocessing_stations_take = _parse_float(station_detail_value)
+                                                                                
+                                                                                # If no name was found, try localization
+                                                                                if not station_name:
+                                                                                    station_name = localization_names.get(station_id, f'Station {station_id}')
+                                                                                
+                                                                                # Insert NPC station
+                                                                                cursor.execute('''
+                                                                                    INSERT OR IGNORE INTO NpcStations (stationId, name, solarSystemId, planetId, typeId, ownerId, 
+                                                                                                                       centerX, centerY, centerZ, lagrangePoint, orbitId, operationId,
+                                                                                                                       isConquerable, reprocessingEfficiency, reprocessingStationsTake)
+                                                                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                                                                ''', (station_id, station_name, system_id, planet_id, station_type_id, station_owner_id,
+                                                                                      station_position[0], station_position[1], station_position[2], lagrange_point, orbit_id, operation_id,
+                                                                                      is_conquerable, reprocessing_efficiency, reprocessing_stations_take))
+                                                                                station_count += 1
+                                                                            except ValueError:
+                                                                                continue
                                         
                                     except ValueError:
                                         continue

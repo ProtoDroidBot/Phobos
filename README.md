@@ -65,25 +65,28 @@ Create a database with custom paths:
 
 Create database and run a query:
 
-    $ python generate.py --query "SELECT COUNT(*) FROM systems"
+    $ python generate.py --query "SELECT COUNT(*) FROM SolarSystems"
 
 ### Database Schema
 
 The generated SQLite database contains the following tables:
 
-* **systems**: Solar systems with coordinates, security status, constellation/region links
-* **constellations**: Constellation data with region links  
-* **regions**: Region data with coordinates
-* **jumps**: Stargate connections between systems (bidirectional)
+* **Regions**: Region data with coordinates
+* **Constellations**: Constellation data with region links  
+* **SolarSystems**: Solar systems with coordinates, star data, constellation/region links
+* **Jumps**: Stargate connections between systems (bidirectional)
+* **Planets**: Planet data with celestial information and proper naming
+* **Moons**: Moon data orbiting planets with proper naming
+* **NpcStations**: NPC-owned stations in space
 
 ### Sample Queries
 
 Show systems with their jump connections:
 ```sql
-SELECT s.name, COUNT(j.to_system_id) as connections 
-FROM systems s 
-LEFT JOIN jumps j ON s.system_id = j.from_system_id 
-GROUP BY s.system_id 
+SELECT s.name, COUNT(j.toSystemId) as connections 
+FROM SolarSystems s 
+LEFT JOIN Jumps j ON s.solarSystemId = j.fromSystemId 
+GROUP BY s.solarSystemId 
 ORDER BY connections DESC 
 LIMIT 10;
 ```
@@ -93,18 +96,38 @@ Find route between systems (basic):
 WITH RECURSIVE route(system_id, path, hops) AS (
   SELECT 30000001, '30000001', 0
   UNION
-  SELECT j.to_system_id, path || '->' || j.to_system_id, hops + 1
-  FROM route r, jumps j 
-  WHERE r.system_id = j.from_system_id AND hops < 5 AND j.to_system_id = 30000002
+  SELECT j.toSystemId, path || '->' || j.toSystemId, hops + 1
+  FROM route r, Jumps j 
+  WHERE r.system_id = j.fromSystemId AND hops < 5 AND j.toSystemId = 30000002
 )
 SELECT * FROM route WHERE system_id = 30000002;
+```
+
+Show planets in a system with proper naming:
+```sql
+SELECT name, celestialIndex, radius, orbitRadius 
+FROM Planets 
+WHERE solarSystemId = 30005266
+ORDER BY celestialIndex;
+```
+
+Find all moons of a specific planet:
+```sql
+SELECT m.name, m.celestialIndex, m.radius, m.orbitRadius
+FROM Moons m
+JOIN Planets p ON m.planetId = p.planetId
+WHERE p.name = 'U87-QF1 - Planet 4'
+ORDER BY m.celestialIndex;
 ```
 
 ### Performance
 
 The script processes approximately:
-- 24,000+ systems from EVE Frontier universe data
-- 7,000+ stargate connections 
+- 24,400+ systems from EVE Frontier universe data
+- 7,400+ stargate connections
+- 83,300+ planets with proper naming
+- 152,500+ moons with hierarchical naming 
+- 50+ NPC stations 
 - Complete extraction typically takes 10-30 seconds
 
 ### Phobos-specific data

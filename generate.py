@@ -1147,9 +1147,9 @@ def main():
         print("\nProcessing complete!")
         print("\nYou can now query the database with tools like sqlite3 or DB Browser for SQLite.")
         print("Example queries:")
-        print("  SELECT name FROM systems LIMIT 10;")
-        print("  SELECT r.name as region, COUNT(s.system_id) as system_count")
-        print("    FROM regions r JOIN systems s ON r.region_id = s.region_id GROUP BY r.name;")
+        print("  SELECT name FROM SolarSystems LIMIT 10;")
+        print("  SELECT r.name as region, COUNT(s.solarSystemId) as system_count")
+        print("    FROM Regions r JOIN SolarSystems s ON r.regionId = s.regionId GROUP BY r.name;")
         
     except Exception as e:
         print(f"Error: {e}")

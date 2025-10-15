@@ -75,5 +75,10 @@ Key files: `run.py`, `flow.py`, `miner/*.py`, `util/translator.py`, `util/eve_no
 
 If unsure about adding a feature, mirror patterns from the closest existing miner/writer.
 
+## 12. Development cycle principles
+- Small, focused changes: Implement one feature or fix one bug per commit/PR.
+- Write tests: Add unit tests for new functionality or bug fixes.
+- Mainline based development: Ensure that changes are committed and pushed to the repository quickly.
+
 ---
 Feedback welcome: Are translation details, FSD binary vs built distinction, or grouping behavior unclear? Specify what to expand or examples needed.

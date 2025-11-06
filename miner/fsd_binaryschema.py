@@ -29,7 +29,7 @@ import json
 from collections import ChainMap
 from miner.base import BaseMiner
 from util import EveNormalizer, cachedproperty
-
+from decimal import Decimal
 
 class FsdBinaryMiner(BaseMiner):
     """Class, which fetches data from FSD Binary and Schema formatted static cache files."""
@@ -63,7 +63,9 @@ class FsdBinaryMiner(BaseMiner):
         def vectorstuff(raw_fsd, returnval):
             test1 = []
             test1.append({"vector_schema": (raw_fsd.schema)})
-            test1.append({"vector_data": (raw_fsd.data)})
+            #test1.append({"vector_data": (raw_fsd.data)})
+            for coordinate in raw_fsd.data:
+                test1.append(str(Decimal(coordinate)))
             return test1
   
         # Function for repeated calls to format objectLoader variables. Please ensure you are calling this function with an object type = dictLoader.DictLoader
@@ -88,7 +90,10 @@ class FsdBinaryMiner(BaseMiner):
                         #print("????2")
                         fsd_complete_merge.append({(str(idx) + "." + str(items1)): (objstuff(raw_fsd[items1], (items1),  ret2))})
                     else:
-                        fsd_complete_merge.append({(str(idx) + "." + str(items1)): str(raw_fsd[items1])})
+                        try:
+                            fsd_complete_merge.append({(str(idx) + "." + str(items1)): str(Decimal(raw_fsd[items1]))})
+                        except:
+                            fsd_complete_merge.append({(str(idx) + "." + str(items1)): str(raw_fsd[items1])})
 
                 except:
                     raise
@@ -121,7 +126,10 @@ class FsdBinaryMiner(BaseMiner):
                             #print("????2")
                             fsd_complete_merge.append({(str(idx) + "." + str(items1)): (objstuff(item2, (items1),  ret2))})
                         else:
-                            fsd_complete_merge.append({(str(idx) + "." + str(items1)): str(item2)})
+                            try:
+                                fsd_complete_merge.append({(str(idx) + "." + str(items1)): str(Decimal(item2))})
+                            except:
+                                fsd_complete_merge.append({(str(idx) + "." + str(items1)): str(item2)})
                     except:
                         raise
             return fsd_complete_merge
@@ -206,38 +214,42 @@ class FsdBinaryMiner(BaseMiner):
             try:
                 
                 for listItems in pre_fsd_data.items():
-                    fsd_json_inter.append((listItems))
-                    items2 = "FSD_ITEM_ENTRY"
+                    # This works fine?
+                    fsd_json_inter.extend((listItems))
+                    items2 = "Entry"
                     test = None
                     if type(listItems) == dictLoader.DictLoader:
                         #print(testing.schema['type'])
-                        fsd_json_inter.append({str(listItems): (dictstuff(listItems, items2, test))})
+                        fsd_json_inter.append({(listItems): (dictstuff(listItems, items2, test))})
                                       
                     elif type(listItems) == miscLoaders.VectorLoader:
                         #print(">")
-                        fsd_json_inter.append({str(listItems): (vectorstuff(listItems,test))})
+                        fsd_json_inter.append({(listItems): (vectorstuff(listItems,test))})
                     elif type(listItems) == objectLoader.ObjectLoader:
                         #print(">")
-                        fsd_json_inter.append({str(listItems): (objstuff(listItems, items2, test))})
+                        fsd_json_inter.append({(listItems): (objstuff(listItems, items2, test))})
                     else:
+                        fsd_json_inter.append(listItems)
                         continue
 
             except:
                 for listItems in pre_fsd_data:
-                    fsd_json_inter.extend(str(listItems))
-                    items2 = "FSD_ITEM_ENTRY"
+                    # This does not work. :<
+                    #fsd_json_inter.extend(str(listItems))
+                    items2 = "Entry"
                     test = None
                     if type(listItems) == dictLoader.DictLoader:
                         #print(testing.schema['type'])
-                        fsd_json_inter.append({str(listItems): (dictstuff(listItems, items2, test))})
+                        fsd_json_inter.append({(listItems): (dictstuff(listItems, items2, test))})
                                       
                     elif type(listItems) == miscLoaders.VectorLoader:
                         #print(">")
-                        fsd_json_inter.append({str(listItems): (vectorstuff(listItems,test))})
+                        fsd_json_inter.append({(listItems): (vectorstuff(listItems,test))})
                     elif type(listItems) == objectLoader.ObjectLoader:
                         #print(">")
-                        fsd_json_inter.append({str(listItems): (objstuff(listItems, items2, test))})
+                        fsd_json_inter.append({(listItems): (objstuff(listItems, items2, test))})
                     else:
+                        fsd_json_inter.append(listItems)
                         continue
             return ({"Type: FSD List": fsd_json_inter})
            

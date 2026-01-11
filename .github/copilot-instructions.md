@@ -80,5 +80,51 @@ If unsure about adding a feature, mirror patterns from the closest existing mine
 - Write tests: Add unit tests for new functionality or bug fixes.
 - Mainline based development: Ensure that changes are committed and pushed to the repository quickly.
 
+## 13. Documentation Index
+
+Comprehensive documentation is available in the `docs/` directory:
+
+### User Guides
+- **[DATA_CONTAINERS.md](docs/DATA_CONTAINERS.md)** - Complete reference for all available data containers and their structure. Details the 113 containers across 6 miners, including types, blueprints, universe data, and localization files.
+- **[SCRIPTS_REFERENCE.md](docs/SCRIPTS_REFERENCE.md)** - Documentation for all utility scripts including `run.py`, `generate.py`, `query_blueprints.py`, test scripts, and SQL utilities. Includes usage examples and command-line options.
+- **[DATABASE_GENERATION.md](docs/DATABASE_GENERATION.md)** - Step-by-step guide to generating the EVE universe SQLite database. Covers schema details, advanced queries, route planning, spatial searches, and integration examples.
+- **[BLUEPRINT_QUERY_GUIDE.md](docs/BLUEPRINT_QUERY_GUIDE.md)** - Guide to querying manufacturing blueprints/schemas using the `query_blueprints.py` tool. Includes search examples and programmatic API usage.
+
+### Quick Links by Task
+- **Extracting data**: See [SCRIPTS_REFERENCE.md § run.py](docs/SCRIPTS_REFERENCE.md#runpy) for CLI options and examples
+- **Finding containers**: See [DATA_CONTAINERS.md § Overview](docs/DATA_CONTAINERS.md#overview) for container counts and locations
+- **Querying blueprints**: See [BLUEPRINT_QUERY_GUIDE.md](docs/BLUEPRINT_QUERY_GUIDE.md) for blueprint search tool
+- **Building databases**: See [DATABASE_GENERATION.md § Quick Start](docs/DATABASE_GENERATION.md#quick-start) for database generation
+- **Understanding types**: See [DATA_CONTAINERS.md § types.json](docs/DATA_CONTAINERS.md#typesjson) for type structure
+- **Universe data**: See [DATA_CONTAINERS.md § fsd_binary_schema](docs/DATA_CONTAINERS.md#miner-fsd_binary_schema) for systems/regions/jumps
+- **SQL queries**: See [DATABASE_GENERATION.md § Database Schema](docs/DATABASE_GENERATION.md#database-schema) for table structures and query examples
+- **Localization**: See [DATA_CONTAINERS.md § Language Support](docs/DATA_CONTAINERS.md#language-support) for translation details
+
+### File Organization
+```
+Phobos/
+├── docs/
+│   ├── DATA_CONTAINERS.md       # Container reference (113 containers)
+│   ├── SCRIPTS_REFERENCE.md     # Script documentation (8 scripts)
+│   ├── DATABASE_GENERATION.md   # Database guide (schema + queries)
+│   └── BLUEPRINT_QUERY_GUIDE.md # Blueprint tool guide
+├── run.py                        # Main extraction script
+├── generate.py                   # Database generator
+├── query_blueprints.py           # Blueprint query tool
+├── flow.py                       # Extraction orchestrator
+├── miner/                        # Data miners (6 types)
+├── util/                         # Utilities (translation, normalization)
+├── writer/                       # Output writers (JSON)
+├── scripts/                      # Helper scripts
+├── sql/                          # SQL templates
+└── output/                       # Extracted data (created by run.py)
+```
+
+When users ask about:
+- Available data → Point to DATA_CONTAINERS.md
+- How to run scripts → Point to SCRIPTS_REFERENCE.md
+- Database queries → Point to DATABASE_GENERATION.md
+- Blueprint searches → Point to BLUEPRINT_QUERY_GUIDE.md
+
 ---
 Feedback welcome: Are translation details, FSD binary vs built distinction, or grouping behavior unclear? Specify what to expand or examples needed.

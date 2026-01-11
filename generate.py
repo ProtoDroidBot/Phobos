@@ -76,6 +76,8 @@ def create_database_schema(conn: sqlite3.Connection) -> None:
     cursor.execute('DROP TABLE IF EXISTS Planets')
     cursor.execute('DROP TABLE IF EXISTS Moons')
     cursor.execute('DROP TABLE IF EXISTS NpcStations')
+    cursor.execute('DROP TABLE IF EXISTS LagrangePoints')
+    cursor.execute('DROP TABLE IF EXISTS Types')
     
     # Regions table
     cursor.execute('''
@@ -236,8 +238,131 @@ def create_database_schema(conn: sqlite3.Connection) -> None:
         )
     ''')
     
+    # Types table for type ID to name lookups
+    cursor.execute('''
+        CREATE TABLE Types (
+            typeId INTEGER PRIMARY KEY,
+            typeName TEXT NOT NULL,
+            groupId INTEGER,
+            description TEXT,
+            published INTEGER,
+            mass REAL,
+            volume REAL,
+            capacity REAL,
+            portionSize INTEGER,
+            basePrice REAL,
+            marketGroupId INTEGER,
+            iconId INTEGER,
+            soundId INTEGER,
+            graphicId INTEGER
+        )
+    ''')
+    
+    # Create indexes for common type lookups
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_types_name ON Types(typeName)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_types_groupId ON Types(groupId)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_types_marketGroupId ON Types(marketGroupId)')
+    
     conn.commit()
     print("Database schema created")
+
+
+def load_types_data(conn: sqlite3.Connection, phobos_path: Path) -> int:
+    """Load types data from fsd_built/types.json into the database."""
+    print("Loading types data...")
+    
+    types_file = phobos_path / 'fsd_built' / 'types.json'
+    if not types_file.exists():
+        print("Warning: types.json not found, skipping types data")
+        return 0
+    
+    cursor = conn.cursor()
+    
+    with open(types_file, 'r', encoding='utf-8') as f:
+        types_data = json.load(f)
+    
+    print(f"Found {len(types_data)} types")
+    
+    count = 0
+    skipped = 0
+    filtered = 0
+    
+    # Legacy/unused group IDs to exclude
+    excluded_groups = {920, 186, 226, 306, 526, 952, 1568, 1667, 1724, 1876, 1975, 4079, 4609, 4770, 4780, 4814, 5004}
+    
+    for type_id_str, type_data in types_data.items():
+        type_id = int(type_id_str)
+        
+        # Extract name - handle localization fields
+        name = None
+        for key in ['typeName_en-us', 'typeName', 'name_en-us', 'name']:
+            if key in type_data:
+                name = type_data[key]
+                break
+        
+        # Skip types without names
+        if not name:
+            skipped += 1
+            continue
+        
+        # Extract fields for filtering
+        published = type_data.get('published', 0)
+        mass = _parse_float(type_data.get('mass'))
+        group_id = type_data.get('groupID')
+        
+        # Apply filters: published=1, mass>0, groupId not in excluded list
+        if published != 1:
+            filtered += 1
+            continue
+        if mass is None or mass <= 0:
+            filtered += 1
+            continue
+        if group_id in excluded_groups:
+            filtered += 1
+            continue
+        
+        # Extract description
+        description = None
+        for key in ['description_en-us', 'description']:
+            if key in type_data:
+                description = type_data[key]
+                break
+        
+        cursor.execute('''
+            INSERT INTO Types (
+                typeId, typeName, groupId, description, published,
+                mass, volume, capacity, portionSize, basePrice,
+                marketGroupId, iconId, soundId, graphicId
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            type_id,
+            name,
+            group_id,
+            description,
+            published,
+            mass,
+            _parse_float(type_data.get('volume')),
+            _parse_float(type_data.get('capacity')),
+            type_data.get('portionSize'),
+            _parse_float(type_data.get('basePrice')),
+            type_data.get('marketGroupID'),
+            type_data.get('iconID'),
+            type_data.get('soundID'),
+            type_data.get('graphicID')
+        ))
+        
+        count += 1
+        if count % 5000 == 0:
+            print(f"  Inserted {count} types...")
+    
+    conn.commit()
+    print(f"Loaded {count} types")
+    if skipped > 0:
+        print(f"Skipped {skipped} types without names")
+    if filtered > 0:
+        print(f"Filtered {filtered} types (unpublished, no mass, or excluded groups)")
+    
+    return count
 
 
 def process_eve_data(phobos_output_dir: str, db_path: str) -> None:
@@ -681,28 +806,94 @@ def process_eve_data(phobos_output_dir: str, db_path: str) -> None:
     moon_count = 0
     station_count = 0
     
-    # Create a lookup for system names (needed for proper planet/moon naming)
-    system_names = {}
-    cursor.execute("SELECT solarSystemId, name FROM SolarSystems")
-    for sys_id, sys_name in cursor.fetchall():
-        system_names[sys_id] = sys_name
-    
-    # Load solarsystemcontent.json for celestial objects data
-    systems_content_path = phobos_path / 'fsd_binary_schema' / 'solarsystemcontent.json'
-    if not systems_content_path.exists():
-        print("Warning: solarsystemcontent.json not found, skipping celestial objects extraction")
+    # Load celestials from SQLite miner output (contains planets and moons)
+    celestials_path = phobos_path / 'sqlite' / 'app__bin64_staticdata_mapObjects_celestials.json'
+    if celestials_path.exists():
+        with open(celestials_path, 'r', encoding='utf-8') as f:
+            celestials_data = json.load(f)
+        
+        # Group IDs: 6=Sun, 7=Planet, 8=Moon, 10=Stargate
+        for celestial in celestials_data:
+            celestial_id = celestial.get('celestialID')
+            group_id = celestial.get('groupID')
+            system_id = celestial.get('solarSystemID')
+            type_id = celestial.get('typeID')
+            
+            # Extract name (use English)
+            name = celestial.get('celestialName_en-us', f'Celestial {celestial_id}')
+            
+            # Get position
+            x = _parse_float(celestial.get('x'))
+            y = _parse_float(celestial.get('y'))
+            z = _parse_float(celestial.get('z'))
+            
+            # Get other properties
+            radius = _parse_float(celestial.get('radius'))
+            celestial_index = celestial.get('celestialIndex')
+            orbit_id = celestial.get('orbitID')
+            
+            if group_id == 7:  # Planet
+                cursor.execute('''
+                    INSERT OR IGNORE INTO Planets (
+                        planetId, name, solarSystemId, celestialIndex, typeId,
+                        centerX, centerY, centerZ, radius
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (celestial_id, name, system_id, celestial_index, type_id,
+                      x, y, z, radius))
+                planet_count += 1
+                
+            elif group_id == 8:  # Moon
+                # For moons, orbitID usually points to the planet
+                cursor.execute('''
+                    INSERT OR IGNORE INTO Moons (
+                        moonId, name, planetId, solarSystemId, typeId,
+                        centerX, centerY, centerZ, radius
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (celestial_id, name, orbit_id, system_id, type_id,
+                      x, y, z, radius))
+                moon_count += 1
     else:
-        with open(systems_content_path, 'r', encoding='utf-8') as f:
-            systems_content_data = json.load(f)
+        print(f"Warning: Celestials file not found at {celestials_path}")
+    
+    # Load NPC stations from SQLite miner output
+    stations_path = phobos_path / 'sqlite' / 'app__bin64_staticdata_mapObjects_npcStations.json'
+    if stations_path.exists():
+        with open(stations_path, 'r', encoding='utf-8') as f:
+            stations_data = json.load(f)
         
-        if 'Type: FSD Multi Index' in systems_content_data:
-            systems_data_for_celestials = systems_content_data['Type: FSD Multi Index']
-        else:
-            systems_data_for_celestials = systems_content_data
-        
-        # TODO: Fix planet/moon/station extraction for new JSON format
-        # The structure has changed and needs to be updated
-        pass
+        for station in stations_data:
+            station_id = station.get('stationID')
+            system_id = station.get('solarSystemID')
+            type_id = station.get('typeID')
+            owner_id = station.get('ownerID')
+            orbit_id = station.get('orbitID')  # Planet ID if orbiting
+            operation_id = station.get('operationID')
+            
+            # Get position
+            x = _parse_float(station.get('x'))
+            y = _parse_float(station.get('y'))
+            z = _parse_float(station.get('z'))
+            
+            # Get station-specific properties
+            is_conquerable = _parse_bool(station.get('isConquerable'))
+            reprocessing_efficiency = _parse_float(station.get('reprocessingEfficiency'))
+            reprocessing_take = _parse_float(station.get('reprocessingStationsTake'))
+            
+            # Station names come from localization
+            name = localization_names.get(station_id, f'Station {station_id}')
+            
+            cursor.execute('''
+                INSERT OR IGNORE INTO NpcStations (
+                    stationId, name, solarSystemId, planetId, typeId, ownerId,
+                    centerX, centerY, centerZ, operationId,
+                    isConquerable, reprocessingEfficiency, reprocessingStationsTake
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (station_id, name, system_id, orbit_id, type_id, owner_id,
+                  x, y, z, operation_id, is_conquerable,
+                  reprocessing_efficiency, reprocessing_take))
+            station_count += 1
+    else:
+        print(f"Warning: NPC stations file not found at {stations_path}")
     
     conn.commit()
     print(f"Inserted {planet_count} planets, {moon_count} moons, and {station_count} NPC stations")
@@ -711,45 +902,57 @@ def process_eve_data(phobos_output_dir: str, db_path: str) -> None:
     print("Extracting Lagrange Points...")
     lpoint_count = 0
     
-    # Reuse the already loaded systems_content_data (it's a list of dicts)
-    for system_dict in systems_data_for_celestials:
-        for system_id_str, system_data in system_dict.items():
-            try:
-                system_id = int(system_id_str)
-            except ValueError:
-                continue
-            
-            # Only process dict entries (skip string entries)
-            if not isinstance(system_data, dict):
-                continue
-            
-            # Get planets data
-            planets_data = system_data.get('planets', {})
-            if isinstance(planets_data, dict):
-                for planet_id_str, planet_data in planets_data.items():
-                    try:
-                        planet_id = int(planet_id_str)
-                    except ValueError:
-                        continue
-                    
-                    # Get lagrange points for this planet
-                    lagrange_points = planet_data.get('lagrangePoints', {})
-                    if isinstance(lagrange_points, dict):
-                        for point_type, point_coords in lagrange_points.items():
-                            # point_coords is [schema_dict, x_str, y_str, z_str]
-                            if isinstance(point_coords, list) and len(point_coords) >= 4:
-                                try:
-                                    x = float(point_coords[1])
-                                    y = float(point_coords[2])
-                                    z = float(point_coords[3])
-                                    
-                                    cursor.execute('''
-                                        INSERT INTO LagrangePoints (solarSystemId, planetId, pointType, centerX, centerY, centerZ)
-                                        VALUES (?, ?, ?, ?, ?, ?)
-                                    ''', (system_id, planet_id, point_type, x, y, z))
-                                    lpoint_count += 1
-                                except (ValueError, TypeError):
-                                    pass
+    # Load solarsystemcontent.json which contains Lagrange point data
+    systems_content_path = phobos_path / 'fsd_binary_schema' / 'solarsystemcontent.json'
+    if systems_content_path.exists():
+        with open(systems_content_path, 'r', encoding='utf-8') as f:
+            systems_content_data = json.load(f)
+        
+        if 'Type: FSD Multi Index' in systems_content_data:
+            systems_data_for_lpoints = systems_content_data['Type: FSD Multi Index']
+        else:
+            systems_data_for_lpoints = systems_content_data
+        
+        for system_dict in systems_data_for_lpoints:
+            for system_id_str, system_data in system_dict.items():
+                try:
+                    system_id = int(system_id_str)
+                except ValueError:
+                    continue
+                
+                # Only process dict entries (skip string entries)
+                if not isinstance(system_data, dict):
+                    continue
+                
+                # Get planets data
+                planets_data = system_data.get('planets', {})
+                if isinstance(planets_data, dict):
+                    for planet_id_str, planet_data in planets_data.items():
+                        try:
+                            planet_id = int(planet_id_str)
+                        except ValueError:
+                            continue
+                        
+                        # Get lagrange points for this planet
+                        lagrange_points = planet_data.get('lagrangePoints', {})
+                        if isinstance(lagrange_points, dict):
+                            for point_type, point_coords in lagrange_points.items():
+                                # point_coords is [schema_dict, x_str, y_str, z_str]
+                                if isinstance(point_coords, list) and len(point_coords) >= 4:
+                                    try:
+                                        x = float(point_coords[1])
+                                        y = float(point_coords[2])
+                                        z = float(point_coords[3])
+                                        
+                                        cursor.execute('''
+                                            INSERT INTO LagrangePoints (solarSystemId, planetId, pointType, centerX, centerY, centerZ)
+                                            VALUES (?, ?, ?, ?, ?, ?)
+                                        ''', (system_id, planet_id, point_type, x, y, z))
+                                        lpoint_count += 1
+                                    except (ValueError, TypeError):
+                                        pass
+    else:
+        print(f"Warning: solarsystemcontent.json not found at {systems_content_path}")
     
     conn.commit()
     print(f"Inserted {lpoint_count} Lagrange Points")
@@ -757,80 +960,47 @@ def process_eve_data(phobos_output_dir: str, db_path: str) -> None:
     # Extract jumps
     print("Extracting jumps from stargate data...")
     
-    # Load solarsystemcontent.json for jump data
-    systems_content_path = phobos_path / 'fsd_binary_schema' / 'solarsystemcontent.json'
-    if not systems_content_path.exists():
-        print("Warning: solarsystemcontent.json not found, skipping jump extraction")
-        return
-        
-    with open(systems_content_path, 'r', encoding='utf-8') as f:
-        systems_content_data = json.load(f)
-    
-    if 'Type: FSD Multi Index' in systems_content_data:
-        systems_data_for_jumps = systems_content_data['Type: FSD Multi Index']
+    # Load celestials data to get stargates (groupID = 10)
+    celestials_path = phobos_path / 'sqlite' / 'app__bin64_staticdata_mapObjects_celestials.json'
+    if not celestials_path.exists():
+        print(f"Warning: Celestials file not found at {celestials_path}, skipping jump extraction")
     else:
-        systems_data_for_jumps = systems_content_data
-    
-    # First pass: Build stargate-to-system mapping
-    stargate_to_system = {}
-    for system_dict in systems_data_for_jumps:
-        for system_id_str, system_entries in system_dict.items():
-            try:
-                system_id = int(system_id_str)
-            except ValueError:
-                continue
-            
-            if isinstance(system_entries, list):
-                system_data = extract_fsd_dict_data(system_entries)
-                stargates_data = system_data.get(f'{system_id}.stargates', [])
+        with open(celestials_path, 'r', encoding='utf-8') as f:
+            celestials_data = json.load(f)
+        
+        # Build jump connections from stargates
+        # celestialNameID on a stargate is the destination system ID
+        jumps = []
+        stargate_count = 0
+        
+        for celestial in celestials_data:
+            if celestial.get('groupID') == 10:  # Stargate
+                stargate_count += 1
+                system_id = celestial.get('solarSystemID')
+                dest_system_id = celestial.get('celestialNameID')
                 
-                for stargate_info in stargates_data:
-                    if isinstance(stargate_info, dict):
-                        for stargate_key in stargate_info.keys():
-                            if stargate_key.startswith('stargates.'):
-                                stargate_id = int(stargate_key.split('.')[-1])
-                                stargate_to_system[stargate_id] = system_id
-    
-    print(f"Found {len(stargate_to_system)} stargates")
-    
-    # Second pass: Extract jump connections
-    jumps = []
-    for system_dict in systems_data_for_jumps:
-        for system_id_str, system_entries in system_dict.items():
-            try:
-                system_id = int(system_id_str)
-            except ValueError:
-                continue
-            
-            if isinstance(system_entries, list):
-                system_data = extract_fsd_dict_data(system_entries)
-                stargates_data = system_data.get(f'{system_id}.stargates', [])
-                
-                for stargate_info in stargates_data:
-                    if isinstance(stargate_info, dict):
-                        for stargate_key, stargate_details in stargate_info.items():
-                            if isinstance(stargate_details, list):
-                                for detail_dict in stargate_details:
-                                    if isinstance(detail_dict, dict):
-                                        for detail_key, detail_value in detail_dict.items():
-                                            if '.destination' in detail_key:
-                                                try:
-                                                    dest_stargate_id = int(detail_value)
-                                                    dest_system_id = stargate_to_system.get(dest_stargate_id)
-                                                    if dest_system_id and dest_system_id != system_id:
-                                                        jumps.append((system_id, dest_system_id))
-                                                except ValueError:
-                                                    pass
-    
-    # Remove duplicates and insert
-    jumps = list(set(jumps))
-    print(f"Found {len(jumps)} jump connections")
-    
-    for from_sys, to_sys in jumps:
-        cursor.execute('INSERT OR IGNORE INTO Jumps (fromSystemId, toSystemId, fromCenterX, fromCenterY, fromCenterZ, toCenterX, toCenterY, toCenterZ, jumpType) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', 
-                      (from_sys, to_sys, None, None, None, None, None, None, None))
+                # celestialNameID should point to the destination system
+                if system_id and dest_system_id and system_id != dest_system_id:
+                    jumps.append((system_id, dest_system_id))
+        
+        print(f"Found {stargate_count} stargates")
+        
+        # Remove duplicates and insert
+        jumps = list(set(jumps))
+        print(f"Found {len(jumps)} jump connections")
+        
+        for from_sys, to_sys in jumps:
+            cursor.execute('''
+                INSERT OR IGNORE INTO Jumps (
+                    fromSystemId, toSystemId, fromCenterX, fromCenterY, fromCenterZ,
+                    toCenterX, toCenterY, toCenterZ, jumpType
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (from_sys, to_sys, None, None, None, None, None, None, None))
     
     conn.commit()
+    
+    # Load types data
+    load_types_data(conn, phobos_path)
     
     # Vacuum database
     conn.execute('VACUUM')
@@ -853,6 +1023,8 @@ def process_eve_data(phobos_output_dir: str, db_path: str) -> None:
     stations_count = cursor.fetchone()[0]
     cursor.execute('SELECT COUNT(*) FROM LagrangePoints')  
     lpoints_count = cursor.fetchone()[0]
+    cursor.execute('SELECT COUNT(*) FROM Types')  
+    types_count = cursor.fetchone()[0]
     
     print(f"Successfully created database: {db_path}")
     print("Database contains:")
@@ -864,6 +1036,7 @@ def process_eve_data(phobos_output_dir: str, db_path: str) -> None:
     print(f"  - {moons_count:,} moons")
     print(f"  - {stations_count:,} NPC stations")
     print(f"  - {lpoints_count:,} Lagrange Points")
+    print(f"  - {types_count:,} types")
     
     conn.close()
 
@@ -923,6 +1096,8 @@ def main():
         print("\nYou can now query the database with tools like sqlite3 or DB Browser for SQLite.")
         print("Example queries:")
         print("  SELECT name FROM SolarSystems LIMIT 10;")
+        print("  SELECT typeName FROM Types WHERE typeId = 34;")
+        print("  SELECT typeId, typeName FROM Types WHERE typeName LIKE '%Tritanium%';")
         print("  SELECT r.name as region, COUNT(s.solarSystemId) as system_count")
         print("    FROM Regions r JOIN SolarSystems s ON r.regionId = s.regionId GROUP BY r.name;")
         

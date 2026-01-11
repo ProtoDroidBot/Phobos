@@ -79,6 +79,16 @@ The generated SQLite database contains the following tables:
 * **Moons**: Moon data orbiting planets with proper naming
 * **NpcStations**: NPC-owned stations in space
 
+## Other Tools
+
+### Image Extractor
+`generate_image_zip.py` extracts item icons from the EVE client resource files and packages them into a ZIP archive.
+See [SCRIPTS_REFERENCE.md](docs/SCRIPTS_REFERENCE.md#generate_image_zippy) for usage.
+
+### Output Cleaner
+`tools/tidy_outputs.py` reduces the size of Phobos JSON output by removing redundant or constant keys.
+See [SCRIPTS_REFERENCE.md](docs/SCRIPTS_REFERENCE.md#toolstidy_outputspy) for usage.
+
 ### Sample Queries
 
 Show systems with their jump connections:

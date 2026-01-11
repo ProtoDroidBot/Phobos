@@ -481,6 +481,73 @@ python test_names.py
 python compare_db_schema.py
 ```
 
+---
+
+### generate_image_zip.py
+
+**Icon Extractor** - Extracts item icons from the EVE client resource files and packages them into a ZIP archive.
+
+**Usage**:
+```bash
+python generate_image_zip.py --eve <EVE_PATH> [OPTIONS]
+```
+
+**Required Arguments**:
+- `--eve` - Path to EVE client installation directory
+
+**Optional Arguments**:
+- `--server` - Server alias (default: `stillness`)
+- `--output` - Path to Phobos output directory containing types.json (default: `output`)
+- `--zip` - Output ZIP file path (default: `output/zip/item_icons.zip`)
+- `--verbose` - Enable verbose progress output
+
+**Features**:
+- Filters for published items with mass > 0
+- Prioritizes high-resolution renders (512px) for ships and structures
+- Falls back to standard UI icons (64px) if high-res not available
+- Handles both PNG and JPG source formats (converts to PNG in zip)
+
+**Examples**:
+```bash
+# Extract icons from EVE Frontier
+python generate_image_zip.py --eve "C:\CCP\EVE Frontier"
+
+# Extract from EVE Online with custom output
+python generate_image_zip.py --eve "C:\CCP\EVE Online" --server tq --zip icons.zip
+```
+
+---
+
+### tools/tidy_outputs.py
+
+**JSON Output Cleaner** - Optimizes Phobos JSON output by removing redundant data.
+
+**Usage**:
+```bash
+python tools/tidy_outputs.py [OPTIONS]
+```
+
+**Optional Arguments**:
+- `--input`, `-i` - Input directory (default: `output`)
+- `--output`, `-o` - Output directory (default: `output_cleaned`)
+- `--dry-run` - Report changes without writing files
+- `--min-count` - Minimum entries to analyze (default: 2)
+- `--max-size-mb` - Skip files larger than size (default: 50)
+
+**Optimization Strategy**:
+- Removes keys that have the exact same value across ALL entries in a file (Constant Keys)
+- Removes duplicate keys where Key A always equals Key B (Redundant Keys)
+- Preserves file structure
+
+**Examples**:
+```bash
+# Clean output directory
+python tools/tidy_outputs.py
+
+# Dry run to see what would be removed
+python tools/tidy_outputs.py --dry-run
+```
+
 ## See Also
 
 - [DATA_CONTAINERS.md](DATA_CONTAINERS.md) - Available data containers

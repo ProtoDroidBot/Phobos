@@ -18,9 +18,6 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
 
 
-from typing import List, Dict, Any
-
-
 def _parse_float(value):
     """Parse a float value from string, handling special cases."""
     if value is None:

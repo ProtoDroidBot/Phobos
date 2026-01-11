@@ -228,7 +228,7 @@ JOIN SolarSystems s ON j.toSolarSystemId = s.solarSystemId
 WHERE j.fromSolarSystemId = 30000142;
 
 -- Calculate distance
-SELECT SQRT(POWER(a.x-b.x,2) + POWER(a.y-b.y,2) + POWER(a.z-b.z,2))
+SELECT SQRT(POWER(a.centerX-b.centerX,2) + POWER(a.centerY-b.centerY,2) + POWER(a.centerZ-b.centerZ,2))
 FROM SolarSystems a, SolarSystems b
 WHERE a.name = 'Jita' AND b.name = 'Amarr';
 ```

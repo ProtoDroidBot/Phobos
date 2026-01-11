@@ -276,9 +276,9 @@ CREATE TABLE Planets (
     planetId INTEGER PRIMARY KEY,
     solarSystemId INTEGER NOT NULL,
     typeId INTEGER,
-    x REAL,
-    y REAL,
-    z REAL,
+    centerX REAL,
+    centerY REAL,
+    centerZ REAL,
     FOREIGN KEY (solarSystemId) REFERENCES SolarSystems(solarSystemId)
 );
 
@@ -289,7 +289,7 @@ CREATE INDEX idx_planets_system ON Planets(solarSystemId);
 - `planetId` - Unique planet identifier
 - `solarSystemId` - Parent system
 - `typeId` - Planet type ID (references Types table)
-- `x`, `y`, `z` - Planet coordinates (system-relative)
+- `centerX`, `centerY`, `centerZ` - Planet coordinates (system-relative)
 
 **Example Queries**:
 ```sql
@@ -321,9 +321,9 @@ CREATE TABLE Moons (
     moonId INTEGER PRIMARY KEY,
     planetId INTEGER,
     solarSystemId INTEGER NOT NULL,
-    x REAL,
-    y REAL,
-    z REAL,
+    centerX REAL,
+    centerY REAL,
+    centerZ REAL,
     FOREIGN KEY (planetId) REFERENCES Planets(planetId),
     FOREIGN KEY (solarSystemId) REFERENCES SolarSystems(solarSystemId)
 );
@@ -336,7 +336,7 @@ CREATE INDEX idx_moons_system ON Moons(solarSystemId);
 - `moonId` - Unique moon identifier
 - `planetId` - Parent planet (can be NULL)
 - `solarSystemId` - Parent system
-- `x`, `y`, `z` - Moon coordinates
+- `centerX`, `centerY`, `centerZ` - Moon coordinates
 
 **Example Query**:
 ```sql
@@ -364,9 +364,9 @@ CREATE TABLE NpcStations (
     stationId INTEGER PRIMARY KEY,
     solarSystemId INTEGER NOT NULL,
     typeId INTEGER,
-    x REAL,
-    y REAL,
-    z REAL,
+    centerX REAL,
+    centerY REAL,
+    centerZ REAL,
     FOREIGN KEY (solarSystemId) REFERENCES SolarSystems(solarSystemId)
 );
 
@@ -377,7 +377,7 @@ CREATE INDEX idx_stations_system ON NpcStations(solarSystemId);
 - `stationId` - Unique station identifier
 - `solarSystemId` - Parent system
 - `typeId` - Station type
-- `x`, `y`, `z` - Station coordinates
+- `centerX`, `centerY`, `centerZ` - Station coordinates
 
 ---
 
@@ -391,9 +391,9 @@ CREATE TABLE LagrangePoints (
     solarSystemId INTEGER NOT NULL,
     planetId INTEGER,
     pointType TEXT NOT NULL,
-    x REAL NOT NULL,
-    y REAL NOT NULL,
-    z REAL NOT NULL,
+    centerX REAL NOT NULL,
+    centerY REAL NOT NULL,
+    centerZ REAL NOT NULL,
     FOREIGN KEY (solarSystemId) REFERENCES SolarSystems(solarSystemId),
     FOREIGN KEY (planetId) REFERENCES Planets(planetId)
 );
@@ -407,14 +407,14 @@ CREATE INDEX idx_lpoints_planet ON LagrangePoints(planetId);
 - `solarSystemId` - Parent system
 - `planetId` - Parent planet
 - `pointType` - L1, L2, L3, L4, or L5
-- `x`, `y`, `z` - Point coordinates
+- `centerX`, `centerY`, `centerZ` - Point coordinates
 
 **Example Query**:
 ```sql
 -- Get all Lagrange points in a system
 SELECT 
     lp.pointType,
-    lp.x, lp.y, lp.z,
+    lp.centerX, lp.centerY, lp.centerZ,
     t.typeName AS planet_type
 FROM LagrangePoints lp
 LEFT JOIN Planets p ON lp.planetId = p.planetId

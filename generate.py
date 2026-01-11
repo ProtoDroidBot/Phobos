@@ -927,6 +927,7 @@ def process_eve_data(phobos_output_dir: str, db_path: str) -> None:
                                         ''', (system_id, planet_id, point_type, x, y, z))
                                         lpoint_count += 1
                                     except (ValueError, TypeError):
+                                        # Coordinate values may be missing or malformed; skip this lagrange point.
                                         pass
     else:
         print(f"Warning: solarsystemcontent.json not found at {systems_content_path}")

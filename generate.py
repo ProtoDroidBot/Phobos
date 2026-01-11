@@ -777,7 +777,7 @@ def process_eve_data(phobos_output_dir: str, db_path: str) -> None:
                             INSERT OR IGNORE INTO SolarSystems (solarSystemId, name, constellationId, regionId, centerX, centerY, centerZ, frost_line, habitable_zone_inner, habitable_zone_outer,
                                                star_age, star_luminosity, star_mass, star_metallicity, star_radius, star_spectral_class, star_temperature) 
                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        ''', (system_id, system_name, None, None, None, None, None, None,
+                        ''', (system_id, system_name, None, None, None, None, None, None, None, None,
                               star_age, star_luminosity, star_mass, star_metallicity, star_radius, star_spectral_class, star_temperature))
                         system_count += 1
                 except ValueError:

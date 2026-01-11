@@ -479,7 +479,7 @@ def process_eve_data(phobos_output_dir: str, db_path: str) -> None:
                 y = float(center_data[2])
                 z = float(center_data[3])
             except (ValueError, TypeError):
-                pass
+                # If parsing fails, leave coordinates as None and continue processing.
         
         # Convert IDs to int if they're strings
         if isinstance(region_id, str):

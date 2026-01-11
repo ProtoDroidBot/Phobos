@@ -120,19 +120,19 @@ CREATE TABLE SolarSystems (
     name TEXT,
     constellationId INTEGER,
     regionId INTEGER,
-    x REAL,
-    y REAL,
-    z REAL,
-    security REAL,
-    radius REAL,
-    luminosity REAL,
-    border INTEGER,
-    corridor INTEGER,
-    fringe INTEGER,
-    hub INTEGER,
-    international INTEGER,
-    regional INTEGER,
-    constellation INTEGER,
+    centerX REAL,
+    centerY REAL,
+    centerZ REAL,
+    frost_line REAL,
+    habitable_zone_inner REAL,
+    habitable_zone_outer REAL,
+    star_age REAL,
+    star_luminosity REAL,
+    star_mass REAL,
+    star_metallicity REAL,
+    star_radius REAL,
+    star_spectral_class TEXT,
+    star_temperature REAL,
     FOREIGN KEY (constellationId) REFERENCES Constellations(constellationId),
     FOREIGN KEY (regionId) REFERENCES Regions(regionId)
 );
@@ -141,18 +141,15 @@ CREATE TABLE SolarSystems (
 CREATE INDEX idx_systems_name ON SolarSystems(name);
 CREATE INDEX idx_systems_constellation ON SolarSystems(constellationId);
 CREATE INDEX idx_systems_region ON SolarSystems(regionId);
-CREATE INDEX idx_systems_security ON SolarSystems(security);
 ```
 
 **Fields**:
 - `solarSystemId` - Unique system identifier
 - `name` - Localized system name (e.g., "Jita", "I4F-MCH")
 - `constellationId`, `regionId` - Parent hierarchy
-- `x`, `y`, `z` - System coordinates in meters (universe reference frame)
-- `security` - Security status (-1.0 to 1.0)
-- `radius` - System radius in meters
-- `luminosity` - Star luminosity
-- Boolean flags: `border`, `corridor`, `fringe`, `hub`, `international`, `regional`, `constellation`
+- `centerX`, `centerY`, `centerZ` - System coordinates in meters (universe reference frame)
+- `star_*` - Star properties (luminosity, mass, radius, spectral class, temperature, age, metallicity)
+- `frost_line`, `habitable_zone_*` - Planetary system zone boundaries
 
 **Example Queries**:
 ```sql
@@ -160,25 +157,25 @@ CREATE INDEX idx_systems_security ON SolarSystems(security);
 SELECT * FROM SolarSystems WHERE name = 'Jita';
 
 -- Get all systems in a constellation
-SELECT solarSystemId, name, security
+SELECT solarSystemId, name, star_spectral_class
 FROM SolarSystems
 WHERE constellationId = 20000001
 ORDER BY name;
 
--- Find high-sec systems
-SELECT name, security
+-- Find systems with G-type stars
+SELECT name, star_spectral_class, star_temperature
 FROM SolarSystems
-WHERE security >= 0.5
-ORDER BY security DESC;
+WHERE star_spectral_class LIKE 'G%'
+ORDER BY star_temperature DESC;
 
 -- Calculate distance between two systems
 SELECT 
     a.name AS from_system,
     b.name AS to_system,
     SQRT(
-        POWER(a.x - b.x, 2) +
-        POWER(a.y - b.y, 2) +
-        POWER(a.z - b.z, 2)
+        POWER(a.centerX - b.centerX, 2) +
+        POWER(a.centerY - b.centerY, 2) +
+        POWER(a.centerZ - b.centerZ, 2)
     ) / 9460730472580800.0 AS distance_ly
 FROM SolarSystems a, SolarSystems b
 WHERE a.solarSystemId = 30000142  -- Jita
@@ -188,9 +185,9 @@ WHERE a.solarSystemId = 30000142  -- Jita
 SELECT 
     name,
     SQRT(
-        POWER(x - 0, 2) +
-        POWER(y - 0, 2) +
-        POWER(z - 0, 2)
+        POWER(centerX - 0, 2) +
+        POWER(centerY - 0, 2) +
+        POWER(centerZ - 0, 2)
     ) AS distance
 FROM SolarSystems
 ORDER BY distance
@@ -533,13 +530,13 @@ SELECT
     (SELECT COUNT(*) FROM Moons) AS moons,
     (SELECT COUNT(*) FROM LagrangePoints) AS lagrange_points;
 
--- Security status distribution
+-- Star spectral class distribution
 SELECT 
-    ROUND(security, 1) AS sec_status,
+    star_spectral_class,
     COUNT(*) AS count
 FROM SolarSystems
-GROUP BY ROUND(security, 1)
-ORDER BY sec_status DESC;
+GROUP BY star_spectral_class
+ORDER BY count DESC;
 ```
 
 ## Data Source Files
@@ -616,10 +613,7 @@ Expected ranges (EVE Frontier):
 **Create additional indexes**:
 ```sql
 -- Spatial queries
-CREATE INDEX idx_systems_xyz ON SolarSystems(x, y, z);
-
--- Security filtering
-CREATE INDEX idx_systems_security ON SolarSystems(security);
+CREATE INDEX idx_systems_xyz ON SolarSystems(centerX, centerY, centerZ);
 
 -- Composite lookups
 CREATE INDEX idx_systems_const_region ON SolarSystems(constellationId, regionId);

@@ -205,20 +205,20 @@ Stargate connections between systems (navigation graph)
 
 ```sql
 CREATE TABLE Jumps (
-    fromSolarSystemId INTEGER NOT NULL,
-    toSolarSystemId INTEGER NOT NULL,
-    PRIMARY KEY (fromSolarSystemId, toSolarSystemId),
-    FOREIGN KEY (fromSolarSystemId) REFERENCES SolarSystems(solarSystemId),
-    FOREIGN KEY (toSolarSystemId) REFERENCES SolarSystems(solarSystemId)
+    fromSystemId INTEGER NOT NULL,
+    toSystemId INTEGER NOT NULL,
+    PRIMARY KEY (fromSystemId, toSystemId),
+    FOREIGN KEY (fromSystemId) REFERENCES SolarSystems(solarSystemId),
+    FOREIGN KEY (toSystemId) REFERENCES SolarSystems(solarSystemId)
 );
 
-CREATE INDEX idx_jumps_from ON Jumps(fromSolarSystemId);
-CREATE INDEX idx_jumps_to ON Jumps(toSolarSystemId);
+CREATE INDEX idx_jumps_from ON Jumps(fromSystemId);
+CREATE INDEX idx_jumps_to ON Jumps(toSystemId);
 ```
 
 **Fields**:
-- `fromSolarSystemId` - Source system
-- `toSolarSystemId` - Destination system
+- `fromSystemId` - Source system
+- `toSystemId` - Destination system
 
 **Note**: Jumps are **bidirectional** but stored once per direction
 
@@ -227,8 +227,8 @@ CREATE INDEX idx_jumps_to ON Jumps(toSolarSystemId);
 -- Get all systems directly connected to Jita
 SELECT s.name, s.solarSystemId
 FROM Jumps j
-JOIN SolarSystems s ON j.toSolarSystemId = s.solarSystemId
-WHERE j.fromSolarSystemId = 30000142
+JOIN SolarSystems s ON j.toSystemId = s.solarSystemId
+WHERE j.fromSystemId = 30000142
 ORDER BY s.name;
 
 -- Count connections per system
@@ -236,8 +236,8 @@ SELECT
     s.name,
     COUNT(*) AS connections
 FROM Jumps j
-JOIN SolarSystems s ON j.fromSolarSystemId = s.solarSystemId
-GROUP BY j.fromSolarSystemId
+JOIN SolarSystems s ON j.fromSystemId = s.solarSystemId
+GROUP BY j.fromSystemId
 ORDER BY connections DESC
 LIMIT 20;
 
@@ -249,8 +249,8 @@ FROM SolarSystems s
 WHERE (
     SELECT COUNT(*)
     FROM Jumps j
-    WHERE j.fromSolarSystemId = s.solarSystemId
-       OR j.toSolarSystemId = s.solarSystemId
+    WHERE j.fromSystemId = s.solarSystemId
+       OR j.toSystemId = s.solarSystemId
 ) = 1;
 
 -- Build route (2-hop example)
@@ -259,10 +259,10 @@ SELECT
     s2.name AS hop1,
     s3.name AS destination
 FROM SolarSystems s1
-JOIN Jumps j1 ON s1.solarSystemId = j1.fromSolarSystemId
-JOIN SolarSystems s2 ON j1.toSolarSystemId = s2.solarSystemId
-JOIN Jumps j2 ON s2.solarSystemId = j2.fromSolarSystemId
-JOIN SolarSystems s3 ON j2.toSolarSystemId = s3.solarSystemId
+JOIN Jumps j1 ON s1.solarSystemId = j1.fromSystemId
+JOIN SolarSystems s2 ON j1.toSystemId = s2.solarSystemId
+JOIN Jumps j2 ON s2.solarSystemId = j2.fromSystemId
+JOIN SolarSystems s3 ON j2.toSystemId = s3.solarSystemId
 WHERE s1.solarSystemId = 30000142  -- Start: Jita
   AND s3.solarSystemId = 30002187  -- End: Amarr
 LIMIT 10;
@@ -469,13 +469,13 @@ WITH RECURSIVE route(system_id, path, hops) AS (
     
     -- Recursive case: add connected systems
     SELECT 
-        j.toSolarSystemId,
-        path || ',' || j.toSolarSystemId,
+        j.toSystemId,
+        path || ',' || j.toSystemId,
         hops + 1
     FROM route r
-    JOIN Jumps j ON r.system_id = j.fromSolarSystemId
+    JOIN Jumps j ON r.system_id = j.fromSystemId
     WHERE hops < 10  -- Max depth
-      AND path NOT LIKE '%' || j.toSolarSystemId || '%'  -- Avoid loops
+      AND path NOT LIKE '%' || j.toSystemId || '%'  -- Avoid loops
 )
 SELECT 
     r.hops,
@@ -654,8 +654,8 @@ system = cursor.fetchone()
 cursor.execute("""
     SELECT s.name
     FROM Jumps j
-    JOIN SolarSystems s ON j.toSolarSystemId = s.solarSystemId
-    WHERE j.fromSolarSystemId = ?
+    JOIN SolarSystems s ON j.toSystemId = s.solarSystemId
+    WHERE j.fromSystemId = ?
 """, (system[0],))
 neighbors = cursor.fetchall()
 

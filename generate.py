@@ -401,7 +401,6 @@ def process_eve_data(phobos_output_dir: str, db_path: str) -> None:
     region_count = 0
     constellation_count = 0
     system_count = 0
-    jump_count = 0
     planet_count = 0
     moon_count = 0
     station_count = 0

@@ -428,6 +428,7 @@ def process_eve_data(phobos_output_dir: str, db_path: str) -> None:
                 y = float(center_data[2])
                 z = float(center_data[3])
             except (ValueError, TypeError):
+                # If center coordinates are invalid or missing, keep defaults (None) so they are stored as NULL.
                 pass
         
         # Convert nameID to int if it's a string

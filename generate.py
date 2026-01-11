@@ -702,6 +702,8 @@ def process_eve_data(phobos_output_dir: str, db_path: str) -> None:
                                 if isinstance(habitable_zone, list) and len(habitable_zone) >= 2:
                                     habitable_zone_inner, habitable_zone_outer = float(habitable_zone[0]), float(habitable_zone[1])
                             except (ValueError, SyntaxError):
+                                # If the habitable zone string is malformed or cannot be parsed,
+                                # leave habitable_zone_inner and habitable_zone_outer as None.
                                 pass
                         elif isinstance(habitable_zone_raw, list) and len(habitable_zone_raw) >= 2:
                             habitable_zone_inner, habitable_zone_outer = float(habitable_zone_raw[0]), float(habitable_zone_raw[1])

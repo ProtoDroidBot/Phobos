@@ -44,8 +44,10 @@ def _parse_bool(value):
         return None
     if isinstance(value, bool):
         return 1 if value else 0
+    if isinstance(value, (int, float)):
+        return 1 if value else 0
     if isinstance(value, str):
-        return 1 if value.lower() == 'true' else 0
+        return 1 if value.lower() in ('true', '1', 'yes') else 0
     return None
 
 def extract_fsd_dict_data(fsd_entry: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -409,18 +411,6 @@ def process_eve_data(phobos_output_dir: str, db_path: str) -> None:
             return float(value)
         except (ValueError, TypeError):
             return None
-    
-    def _parse_bool(value):
-        """Safely parse boolean value from FSD data"""
-        if value is None:
-            return None
-        if isinstance(value, bool):
-            return value
-        if isinstance(value, (int, float)):
-            return bool(value)
-        if isinstance(value, str):
-            return value.lower() in ('true', '1', 'yes')
-        return None
     
     # Initialize counters
     region_count = 0

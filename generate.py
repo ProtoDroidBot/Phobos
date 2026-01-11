@@ -397,18 +397,6 @@ def process_eve_data(phobos_output_dir: str, db_path: str) -> None:
     create_database_schema(conn)
     cursor = conn.cursor()
     
-    # Helper functions for data parsing
-    def _parse_float(value):
-        """Safely parse float value from FSD data"""
-        if value is None:
-            return None
-        if isinstance(value, (int, float)):
-            return float(value)
-        try:
-            return float(value)
-        except (ValueError, TypeError):
-            return None
-    
     # Initialize counters
     region_count = 0
     constellation_count = 0

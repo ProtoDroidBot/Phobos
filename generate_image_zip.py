@@ -15,7 +15,6 @@ import json
 import os
 import sys
 import zipfile
-from pathlib import Path
 
 from util.resource_browser import ResourceBrowser
 

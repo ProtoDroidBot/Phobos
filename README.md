@@ -28,6 +28,118 @@ It doesn't mean that you should not use these miners. Generally speaking, if you
 
     $ python run.py --eve=E:\eve\client\ --json=~\Desktop\phobos_tq_en-us --list="evetypes, marketgroups, metadata"
 
+## EVE Universe Database Generator
+
+The `generate.py` script extracts EVE universe data from Phobos output and creates a normalized SQLite database with systems, constellations, regions, and jump connections. This is particularly useful for creating navigation tools, route planners, and universe analysis applications for EVE Frontier.
+
+### Requirements for generate.py
+
+* Phobos output files (run the main extraction first)
+* Python 3.7+ (no additional dependencies required)
+
+### Usage
+
+First, run Phobos to extract the raw EVE client data:
+
+    $ python run.py --eve="C:\CCP\EVE Frontier" --json=output --translate=multi
+
+Then use the generated output to create the universe database:
+
+    $ python generate.py --output eve_universe.db --phobos-output ./output
+
+### Arguments for generate.py
+
+* `--output` or `-o`: Optional. Output SQLite database path (default: `eve_universe.db`)
+* `--phobos-output` or `-p`: Optional. Path to Phobos output directory (default: `./output`)
+* `--query` or `-q`: Optional. Run a simple query on the database after creation
+
+### Examples
+
+Create a database with default settings:
+
+    $ python generate.py
+
+Create a database with custom paths:
+
+    $ python generate.py --output frontier_universe.db --phobos-output ./phobos_data
+
+Create database and run a query:
+
+    $ python generate.py --query "SELECT COUNT(*) FROM SolarSystems"
+
+### Database Schema
+
+The generated SQLite database contains the following tables:
+
+* **Regions**: Region data with coordinates
+* **Constellations**: Constellation data with region links  
+* **SolarSystems**: Solar systems with coordinates, star data, constellation/region links
+* **Jumps**: Stargate connections between systems (bidirectional)
+* **Planets**: Planet data with celestial information and proper naming
+* **Moons**: Moon data orbiting planets with proper naming
+* **NpcStations**: NPC-owned stations in space
+
+## Other Tools
+
+### Image Extractor
+`generate_image_zip.py` extracts item icons from the EVE client resource files and packages them into a ZIP archive.
+See [SCRIPTS_REFERENCE.md](docs/SCRIPTS_REFERENCE.md#generate_image_zippy) for usage.
+
+### Output Cleaner
+`tools/tidy_outputs.py` reduces the size of Phobos JSON output by removing redundant or constant keys.
+See [SCRIPTS_REFERENCE.md](docs/SCRIPTS_REFERENCE.md#toolstidy_outputspy) for usage.
+
+### Sample Queries
+
+Show systems with their jump connections:
+```sql
+SELECT s.name, COUNT(j.toSystemId) as connections 
+FROM SolarSystems s 
+LEFT JOIN Jumps j ON s.solarSystemId = j.fromSystemId 
+GROUP BY s.solarSystemId 
+ORDER BY connections DESC 
+LIMIT 10;
+```
+
+Find route between systems (basic):
+```sql
+WITH RECURSIVE route(system_id, path, hops) AS (
+  SELECT 30000001, '30000001', 0
+  UNION
+  SELECT j.toSystemId, path || '->' || j.toSystemId, hops + 1
+  FROM route r, Jumps j 
+  WHERE r.system_id = j.fromSystemId AND hops < 5 AND j.toSystemId = 30000002
+)
+SELECT * FROM route WHERE system_id = 30000002;
+```
+
+Show planets in a system with proper naming:
+```sql
+SELECT name, celestialIndex, radius, orbitRadius 
+FROM Planets 
+WHERE solarSystemId = 30005266
+ORDER BY celestialIndex;
+```
+
+Find all moons of a specific planet:
+```sql
+SELECT m.name, m.celestialIndex, m.radius, m.orbitRadius
+FROM Moons m
+JOIN Planets p ON m.planetId = p.planetId
+WHERE p.name = 'U87-QF1 - Planet 4'
+ORDER BY m.celestialIndex;
+```
+
+### Performance
+
+The script processes approximately:
+- 24,400+ systems from EVE Frontier universe data
+- 7,400+ stargate connections
+- 83,300+ planets with proper naming
+- 152,500+ moons with hierarchical naming 
+- 50+ NPC stations 
+- Complete extraction typically takes 10-30 seconds
+
 ### Phobos-specific data
 Besides raw data Phobos pulls from client, it provides two custom containers.
 

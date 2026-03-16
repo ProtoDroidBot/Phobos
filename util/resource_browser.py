@@ -71,6 +71,15 @@ class ResourceBrowser(object):
         self.__verify_data(data=data, file_info=file_info)
         return file_info
 
+    def find_resource_path(self, suffix, prefix=None):
+        target_suffix = '/{}'.format(suffix.lstrip('/'))
+        for resource_path in self._resource_index:
+            if prefix is not None and not resource_path.startswith(prefix):
+                continue
+            if resource_path.endswith(target_suffix):
+                return resource_path
+        raise KeyError(suffix)
+
     def __verify_data(self, data, file_info):
         if len(data) != file_info.file_size:
             raise FileIntegrityError(u'file size mismatch when reading {}'.format(file_info.resource_path))
@@ -82,7 +91,7 @@ class ResourceBrowser(object):
     @cachedproperty
     def _resource_index(self):
         index = {}
-        res_index_path = os.path.join(self._eve_path, self._server_alias, 'resfileindex.txt')
+        res_index_path = self._resolve_resfileindex_path()
         with open(res_index_path) as f:
             for resource_path, file_relpath, file_hash, file_size, compressed_size in csv.reader(f):
                 index[resource_path] = FileInfo(
@@ -103,6 +112,25 @@ class ResourceBrowser(object):
                     file_size=int(file_size),
                     compressed_size=int(compressed_size))
         return index
+
+    def _resolve_resfileindex_path(self):
+        legacy_path = os.path.join(self._eve_path, self._server_alias, 'resfileindex.txt')
+        if os.path.exists(legacy_path):
+            return legacy_path
+
+        frontier_path = os.path.join(
+            self._eve_path,
+            self._server_alias,
+            'EVE.app',
+            'Contents',
+            'Resources',
+            'build',
+            'resfileindex.txt',
+        )
+        if os.path.exists(frontier_path):
+            return frontier_path
+
+        return legacy_path
 
 
 class FileIntegrityError(Exception):

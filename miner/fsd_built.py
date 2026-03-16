@@ -51,8 +51,8 @@ class FsdBuiltMiner(BaseMiner):
         except KeyError:
             self._container_not_found(container_name)
         else:
-            if os.name != 'nt' or struct.calcsize('P') * 8 != 64:
-                msg = 'need 64-bit python under Windows to execute loader'
+            if not self._platform_supported(os.name, sys.platform, struct.calcsize('P') * 8):
+                msg = 'need 64-bit Python on Windows or macOS to execute loader'
                 raise PlatformError(msg)
             loader_filename = loader_respath.split('/')[-1]
             loader_info = self._resbrowser.get_file_info(loader_respath)
@@ -87,7 +87,11 @@ class FsdBuiltMiner(BaseMiner):
         loaders = {}
         datas = {}
         for resource_path in self._resbrowser.respath_iter():
-            m = re.match(r'^app:/bin64/(\w+/)*(?P<name>\w+)Loader.pyd$', resource_path, flags=re.UNICODE)
+            m = re.match(
+                r'^app:/(?:.+/)?bin64/(\w+/)*(?P<name>\w+)Loader\.(?:pyd|so)$',
+                resource_path,
+                flags=re.UNICODE,
+            )
             if m:
                 loaders[m.group('name').lower()] = resource_path
                 continue
@@ -123,6 +127,12 @@ class FsdBuiltMiner(BaseMiner):
     def _compare_files(self, file1_path, file2_path):
         with open(file1_path, 'rb') as f1, open(file2_path, 'rb') as f2:
             return f1.read() == f2.read()
+
+    @staticmethod
+    def _platform_supported(os_name, sys_platform, pointer_bits):
+        if pointer_bits != 64:
+            return False
+        return os_name == 'nt' or sys_platform == 'darwin'
 
 
 class PlatformError(Exception):

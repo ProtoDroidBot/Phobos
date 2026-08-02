@@ -4,6 +4,8 @@
 import json
 from pathlib import Path
 
+from exact_double import exact_double_text
+
 # Load the data
 phobos_path = Path("output")
 systems_content_path = phobos_path / 'fsd_binary_schema' / 'solarsystemcontent.json'
@@ -45,9 +47,11 @@ for i, system_dict in enumerate(systems_content_data[:100]):
                         # point_coords is [schema_dict, x_str, y_str, z_str]
                         if isinstance(point_coords, list) and len(point_coords) >= 4:
                             try:
-                                x = float(point_coords[1])
-                                y = float(point_coords[2])
-                                z = float(point_coords[3])
+                                x = exact_double_text(point_coords[1])
+                                y = exact_double_text(point_coords[2])
+                                z = exact_double_text(point_coords[3])
+                                if x is None or y is None or z is None:
+                                    raise ValueError("invalid coordinate")
                                 
                                 lpoint_count += 1
                                 if len(sample_lpoints) < 10:
@@ -63,4 +67,4 @@ for i, system_dict in enumerate(systems_content_data[:100]):
 print(f"Found {lpoint_count} Lagrange Points in first 100 systems")
 print("\nSample L-Points:")
 for lp in sample_lpoints:
-    print(f"  System {lp['system_id']}, Planet {lp['planet_id']}, {lp['type']}: ({lp['position'][0]:.2e}, {lp['position'][1]:.2e}, {lp['position'][2]:.2e})")
+    print(f"  System {lp['system_id']}, Planet {lp['planet_id']}, {lp['type']}: ({lp['position'][0]}, {lp['position'][1]}, {lp['position'][2]})")

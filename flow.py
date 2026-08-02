@@ -26,9 +26,17 @@ class FlowManager(object):
     Class for handling high-level flow of script.
     """
 
-    def __init__(self, miners, writers):
+    def __init__(self, miners, writers, manifest=None):
         self._miners = miners
         self._writers = writers
+        self._manifest = manifest
+
+    @staticmethod
+    def _source_metadata(miner, container_name):
+        try:
+            return miner.source_metadata(container_name)
+        except Exception as error:
+            return {'metadataError': '{}: {}'.format(type(error).__name__, error)}
 
     def run(self, filter_string, language):
         filter_set = self._parse_filter(name_filter=filter_string)
@@ -51,8 +59,18 @@ class FlowManager(object):
                     raise
                 except Exception as e:
                     print('    unable to fetch data - {}: {}'.format(type(e).__name__, e))
+                    if self._manifest is not None:
+                        self._manifest.record(
+                            miner=miner.name,
+                            container=container_name,
+                            status='failed',
+                            backend=miner.backend_name,
+                            error='{}: {}'.format(type(e).__name__, e),
+                            source=self._source_metadata(miner, container_name),
+                        )
                 else:
                     # Write data using passed writers
+                    write_error = None
                     for writer in self._writers:
                         try:
                             writer.write(miner_name=miner.name, container_name=container_name, container_data=container_data)
@@ -60,11 +78,29 @@ class FlowManager(object):
                             raise
                         except Exception as e:
                             print('    unable to write data with {} - {}: {}'.format(type(writer).__name__, type(e).__name__, e))
+                            write_error = '{}: {}'.format(type(e).__name__, e)
+                    if self._manifest is not None:
+                        self._manifest.record(
+                            miner=miner.name,
+                            container=container_name,
+                            status='failed' if write_error else 'success',
+                            backend=miner.backend_name,
+                            error=write_error,
+                            source=self._source_metadata(miner, container_name),
+                        )
         # Print info messages about requested, but unavailable containers
         if missing_set:
             print('Containers which were requested, but are not available:')
             for flow_name in sorted(missing_set):
                 print('  {}'.format(flow_name))
+                if self._manifest is not None:
+                    self._manifest.record(
+                        miner='unknown',
+                        container=flow_name,
+                        status='skipped',
+                        error='requested container is unavailable',
+                    )
+        return self._manifest
 
     def _parse_filter(self, name_filter):
         """

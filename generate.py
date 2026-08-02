@@ -17,6 +17,8 @@ import argparse
 from pathlib import Path
 from typing import Dict, List, Any
 
+from exact_double import exact_double_text
+
 
 def _parse_float(value):
     """Parse a float value from string, handling special cases."""
@@ -34,6 +36,11 @@ def _parse_float(value):
         except ValueError:
             return None
     return None
+
+
+def _parse_coordinate(value):
+    """Keep a coordinate's complete decimal representation as text."""
+    return exact_double_text(value)
 
 def _parse_bool(value):
     """Parse a boolean value from string."""
@@ -83,9 +90,9 @@ def create_database_schema(conn: sqlite3.Connection) -> None:
         CREATE TABLE Regions (
             regionId INTEGER PRIMARY KEY,
             name TEXT,
-            centerX REAL,
-            centerY REAL,
-            centerZ REAL
+            centerX TEXT,
+            centerY TEXT,
+            centerZ TEXT
         )
     ''')
     
@@ -95,9 +102,9 @@ def create_database_schema(conn: sqlite3.Connection) -> None:
             constellationId INTEGER PRIMARY KEY,
             name TEXT,
             regionId INTEGER,
-            centerX REAL,
-            centerY REAL,
-            centerZ REAL,
+            centerX TEXT,
+            centerY TEXT,
+            centerZ TEXT,
             FOREIGN KEY (regionId) REFERENCES Regions (regionId)
         )
     ''')
@@ -109,9 +116,9 @@ def create_database_schema(conn: sqlite3.Connection) -> None:
             name TEXT,
             constellationId INTEGER,
             regionId INTEGER,
-            centerX REAL,
-            centerY REAL,
-            centerZ REAL,
+            centerX TEXT,
+            centerY TEXT,
+            centerZ TEXT,
             frost_line REAL,
             habitable_zone_inner REAL,
             habitable_zone_outer REAL,
@@ -130,12 +137,12 @@ def create_database_schema(conn: sqlite3.Connection) -> None:
         CREATE TABLE Jumps (
             fromSystemId INTEGER,
             toSystemId INTEGER,
-            fromCenterX REAL,
-            fromCenterY REAL,
-            fromCenterZ REAL,
-            toCenterX REAL,
-            toCenterY REAL,
-            toCenterZ REAL,
+            fromCenterX TEXT,
+            fromCenterY TEXT,
+            fromCenterZ TEXT,
+            toCenterX TEXT,
+            toCenterY TEXT,
+            toCenterZ TEXT,
             jumpType INTEGER,
             PRIMARY KEY (fromSystemId, toSystemId),
             FOREIGN KEY (fromSystemId) REFERENCES SolarSystems (solarSystemId),
@@ -151,9 +158,9 @@ def create_database_schema(conn: sqlite3.Connection) -> None:
             solarSystemId INTEGER,
             celestialIndex INTEGER,
             typeId INTEGER,
-            centerX REAL,
-            centerY REAL,
-            centerZ REAL,
+            centerX TEXT,
+            centerY TEXT,
+            centerZ TEXT,
             radius REAL,
             density REAL,
             eccentricity REAL,
@@ -178,9 +185,9 @@ def create_database_schema(conn: sqlite3.Connection) -> None:
             planetId INTEGER,
             solarSystemId INTEGER,
             typeId INTEGER,
-            centerX REAL,
-            centerY REAL,
-            centerZ REAL,
+            centerX TEXT,
+            centerY TEXT,
+            centerZ TEXT,
             radius REAL,
             density REAL,
             eccentricity REAL,
@@ -208,9 +215,9 @@ def create_database_schema(conn: sqlite3.Connection) -> None:
             planetId INTEGER,
             typeId INTEGER,
             ownerId INTEGER,
-            centerX REAL,
-            centerY REAL,
-            centerZ REAL,
+            centerX TEXT,
+            centerY TEXT,
+            centerZ TEXT,
             lagrangePoint INTEGER,
             orbitId INTEGER,
             operationId INTEGER,
@@ -229,9 +236,9 @@ def create_database_schema(conn: sqlite3.Connection) -> None:
             solarSystemId INTEGER,
             planetId INTEGER,
             pointType TEXT,
-            centerX REAL,
-            centerY REAL,
-            centerZ REAL,
+            centerX TEXT,
+            centerY TEXT,
+            centerZ TEXT,
             FOREIGN KEY (solarSystemId) REFERENCES SolarSystems (solarSystemId),
             FOREIGN KEY (planetId) REFERENCES Planets (planetId)
         )
@@ -424,9 +431,11 @@ def process_eve_data(phobos_output_dir: str, db_path: str) -> None:
         # center is [schema_dict, x_str, y_str, z_str]
         if len(center_data) >= 4:
             try:
-                x = float(center_data[1])
-                y = float(center_data[2])
-                z = float(center_data[3])
+                x = _parse_coordinate(center_data[1])
+                y = _parse_coordinate(center_data[2])
+                z = _parse_coordinate(center_data[3])
+                if x is None or y is None or z is None:
+                    raise ValueError("invalid coordinate")
             except (ValueError, TypeError):
                 # If center coordinates are invalid or missing, keep defaults (None) so they are stored as NULL.
                 pass
@@ -476,9 +485,11 @@ def process_eve_data(phobos_output_dir: str, db_path: str) -> None:
         # center is [schema_dict, x_str, y_str, z_str]
         if len(center_data) >= 4:
             try:
-                x = float(center_data[1])
-                y = float(center_data[2])
-                z = float(center_data[3])
+                x = _parse_coordinate(center_data[1])
+                y = _parse_coordinate(center_data[2])
+                z = _parse_coordinate(center_data[3])
+                if x is None or y is None or z is None:
+                    raise ValueError("invalid coordinate")
             except (ValueError, TypeError):
                 # If parsing fails, leave coordinates as None and continue processing.
                 pass
@@ -600,9 +611,11 @@ def process_eve_data(phobos_output_dir: str, db_path: str) -> None:
                 # center is [schema_dict, x_str, y_str, z_str]
                 if len(center_data) >= 4:
                     try:
-                        x = float(center_data[1])
-                        y = float(center_data[2])
-                        z = float(center_data[3])
+                        x = _parse_coordinate(center_data[1])
+                        y = _parse_coordinate(center_data[2])
+                        z = _parse_coordinate(center_data[3])
+                        if x is None or y is None or z is None:
+                            raise ValueError("invalid coordinate")
                     except (ValueError, TypeError):
                         # If center coordinates are invalid, keep defaults (None).
                         pass
@@ -717,7 +730,9 @@ def process_eve_data(phobos_output_dir: str, db_path: str) -> None:
                         if len(center_data) >= 2 and isinstance(center_data[1], dict):
                             vector_data = center_data[1].get('vector_data', [])
                             if len(vector_data) >= 3:
-                                x, y, z = vector_data[0], vector_data[1], vector_data[2]
+                                x = _parse_coordinate(vector_data[0])
+                                y = _parse_coordinate(vector_data[1])
+                                z = _parse_coordinate(vector_data[2])
                         
                         # Convert nameID to int if it's a string
                         if isinstance(name_id, str):
@@ -803,9 +818,9 @@ def process_eve_data(phobos_output_dir: str, db_path: str) -> None:
             name = celestial.get('celestialName_en-us', f'Celestial {celestial_id}')
             
             # Get position
-            x = _parse_float(celestial.get('x'))
-            y = _parse_float(celestial.get('y'))
-            z = _parse_float(celestial.get('z'))
+            x = _parse_coordinate(celestial.get('x'))
+            y = _parse_coordinate(celestial.get('y'))
+            z = _parse_coordinate(celestial.get('z'))
             
             # Get other properties
             radius = _parse_float(celestial.get('radius'))
@@ -850,9 +865,9 @@ def process_eve_data(phobos_output_dir: str, db_path: str) -> None:
             operation_id = station.get('operationID')
             
             # Get position
-            x = _parse_float(station.get('x'))
-            y = _parse_float(station.get('y'))
-            z = _parse_float(station.get('z'))
+            x = _parse_coordinate(station.get('x'))
+            y = _parse_coordinate(station.get('y'))
+            z = _parse_coordinate(station.get('z'))
             
             # Get station-specific properties
             is_conquerable = _parse_bool(station.get('isConquerable'))
@@ -920,9 +935,11 @@ def process_eve_data(phobos_output_dir: str, db_path: str) -> None:
                                 # point_coords is [schema_dict, x_str, y_str, z_str]
                                 if isinstance(point_coords, list) and len(point_coords) >= 4:
                                     try:
-                                        x = float(point_coords[1])
-                                        y = float(point_coords[2])
-                                        z = float(point_coords[3])
+                                        x = _parse_coordinate(point_coords[1])
+                                        y = _parse_coordinate(point_coords[2])
+                                        z = _parse_coordinate(point_coords[3])
+                                        if x is None or y is None or z is None:
+                                            raise ValueError("invalid coordinate")
                                         
                                         cursor.execute('''
                                             INSERT INTO LagrangePoints (solarSystemId, planetId, pointType, centerX, centerY, centerZ)

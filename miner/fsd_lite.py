@@ -58,6 +58,12 @@ class FsdLiteMiner(BaseMiner):
             self._translator.translate_container(rows, language, verbose=verbose)
             return rows
 
+    def source_metadata(self, container_name):
+        resource_path = self._contname_respath_map.get(container_name)
+        if resource_path is None:
+            return None
+        return self._file_info_metadata(self._resbrowser.get_file_info(resource_path))
+
     @cachedproperty
     def _contname_respath_map(self):
         """

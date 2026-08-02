@@ -48,6 +48,23 @@ class BaseMiner(object):
         """Return miner class name."""
         return type(self).__name__
 
+    @property
+    def backend_name(self):
+        """Describe the implementation used for extraction manifests."""
+        return 'python3'
+
+    def source_metadata(self, container_name):
+        """Return indexed source identity for extraction manifests."""
+        return None
+
+    @staticmethod
+    def _file_info_metadata(file_info):
+        return {
+            'resourcePath': file_info.resource_path,
+            'md5': file_info.file_hash,
+            'size': file_info.file_size,
+        }
+
     def _container_not_found(self, cont_name):
         msg = 'container "{}" is not available for miner {}'.format(cont_name, type(self).__name__)
         raise ContainerNameError(msg)

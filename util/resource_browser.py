@@ -70,6 +70,15 @@ class ResourceBrowser(object):
             data = f.read()
         self.__verify_data(data=data, file_info=file_info)
         return file_info
+    
+    def get_file_path(self, resource_path):
+        """Return file info for requested resource."""
+        file_info = self._resource_index[resource_path]
+        file_path = file_info.file_abspath
+        with open(file_path, 'rb') as f:
+            data = f.read()
+        self.__verify_data(data=data, file_info=file_info)
+        return file_path
 
     def find_resource_path(self, suffix, prefix=None):
         target_suffix = '/{}'.format(suffix.lstrip('/'))

@@ -20,6 +20,7 @@
 
 import contextlib
 import gc
+import hashlib
 import importlib
 import os
 import re
@@ -36,10 +37,18 @@ class FsdBuiltMiner(BaseMiner):
 
     name = 'fsd_built'
 
-    def __init__(self, resbrowser, translator):
+    def __init__(self, resbrowser, translator, client_profile=None, native_worker=None):
         self._resbrowser = resbrowser
         self._translator = translator
+        self._client_profile = client_profile
+        self._native_worker = native_worker
         self.__temp_dir = None
+
+    @property
+    def backend_name(self):
+        if self._client_profile is not None and self._client_profile.is_legacy_py27:
+            return 'python2-native-worker'
+        return 'python3-native-loader'
 
     def contname_iter(self):
         for container_name in sorted(self._contname_fsdfiles_map):
@@ -51,12 +60,36 @@ class FsdBuiltMiner(BaseMiner):
         except KeyError:
             self._container_not_found(container_name)
         else:
-            if not self._platform_supported(os.name, sys.platform, struct.calcsize('P') * 8):
-                msg = 'need 64-bit Python on Windows or macOS to execute loader'
-                raise PlatformError(msg)
             loader_filename = loader_respath.split('/')[-1]
             loader_info = self._resbrowser.get_file_info(loader_respath)
             data_info = self._resbrowser.get_file_info(data_respath)
+            if self._client_profile is not None and self._client_profile.is_legacy_py27:
+                if self._native_worker is None:
+                    raise PlatformError('legacy client native loader requires a configured Python 2 worker')
+                loader_modname = os.path.splitext(loader_filename)[0]
+                direct_loader_path = os.path.join(
+                    self._client_profile.eve_path,
+                    self._client_profile.server_alias,
+                    *loader_respath[len('app:/'):].split('/'),
+                )
+                if os.path.isfile(direct_loader_path):
+                    with open(direct_loader_path, 'rb') as direct_loader:
+                        direct_hash = hashlib.md5(direct_loader.read()).hexdigest()
+                    if direct_hash != loader_info.file_hash:
+                        raise ValueError('direct loader checksum does not match resource index')
+                    loader_path = direct_loader_path
+                else:
+                    loader_path = loader_info.file_abspath
+                normalized_data = self._native_worker.load_fsd(
+                    loader_modname,
+                    loader_path,
+                    data_info.file_abspath,
+                )
+                self._translator.translate_container(normalized_data, language, verbose=verbose)
+                return normalized_data
+            if not self._platform_supported(os.name, sys.platform, struct.calcsize('P') * 8):
+                msg = 'need 64-bit Python on Windows or macOS to execute loader'
+                raise PlatformError(msg)
 
             with self._temp_dir() as temp_dir:
                 sys.path.insert(0, temp_dir)
@@ -77,6 +110,15 @@ class FsdBuiltMiner(BaseMiner):
 
             self._translator.translate_container(normalized_data, language, verbose=verbose)
             return normalized_data
+
+    def source_metadata(self, container_name):
+        pair = self._contname_fsdfiles_map.get(container_name)
+        if pair is None:
+            return None
+        return [
+            self._file_info_metadata(self._resbrowser.get_file_info(resource_path))
+            for resource_path in pair
+        ]
 
     @cachedproperty
     def _contname_fsdfiles_map(self):

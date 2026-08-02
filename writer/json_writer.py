@@ -25,6 +25,7 @@ import re
 from collections import OrderedDict
 
 from .base import BaseWriter
+from compat.serialization import bytes_envelope
 
 
 def natural_sort(i):
@@ -48,6 +49,8 @@ class CustomEncoder(json.JSONEncoder):
         return json.JSONEncoder.iterencode(self, obj, *args, **kwargs)
 
     def _route_object(self, obj):
+        if isinstance(obj, (bytes, bytearray, memoryview)):
+            return bytes_envelope(obj)
         obj_type = type(obj)
         method = self._traversal_map.get(obj_type)
         if method is not None:
@@ -63,7 +66,16 @@ class CustomEncoder(json.JSONEncoder):
         """
         new_obj = {}
         for k, v in obj.items():
-            new_obj[self._route_object(k)] = self._route_object(v)
+            if isinstance(k, bytes):
+                try:
+                    routed_key = k.decode('utf-8')
+                except UnicodeDecodeError:
+                    routed_key = 'bytes:' + bytes_envelope(k)['data']
+            else:
+                routed_key = self._route_object(k)
+                if not isinstance(routed_key, (str, int, float, bool)) and routed_key is not None:
+                    routed_key = str(routed_key)
+            new_obj[routed_key] = self._route_object(v)
         new_obj = self._prepare_map(new_obj)
         return new_obj
 
@@ -85,8 +97,9 @@ class CustomEncoder(json.JSONEncoder):
         python objects like tuple, and encoding fails.
         """
         new_obj = OrderedDict()
-        for k in sorted(obj.keys(), key=natural_sort):
-            new_obj[str(k)] = obj[k]
+        string_items = [(str(k), v) for k, v in obj.items()]
+        for key, value in sorted(string_items, key=lambda item: natural_sort(item[0])):
+            new_obj[key] = value
         return new_obj
 
 

@@ -41,6 +41,11 @@ That's it! You now have a complete queryable EVE universe database.
 
 ## Database Schema
 
+All `centerX`, `centerY`, and `centerZ` columns store exact decimal `TEXT`.
+This retains the complete decimal representation of the source IEEE-754
+double. For spatial arithmetic, cast at the point of use—for example,
+`CAST(centerX AS REAL)`.
+
 ### Regions Table
 
 Top-level universe divisions (e.g., Genesis, Heimatar, EVE Frontier regions)
@@ -49,9 +54,9 @@ Top-level universe divisions (e.g., Genesis, Heimatar, EVE Frontier regions)
 CREATE TABLE Regions (
     regionId INTEGER PRIMARY KEY,
     name TEXT,
-    centerX REAL,
-    centerY REAL,
-    centerZ REAL
+    centerX TEXT,
+    centerY TEXT,
+    centerZ TEXT
 );
 ```
 
@@ -80,9 +85,9 @@ CREATE TABLE Constellations (
     constellationId INTEGER PRIMARY KEY,
     name TEXT,
     regionId INTEGER,
-    centerX REAL,
-    centerY REAL,
-    centerZ REAL,
+    centerX TEXT,
+    centerY TEXT,
+    centerZ TEXT,
     FOREIGN KEY (regionId) REFERENCES Regions(regionId)
 );
 ```
@@ -120,9 +125,9 @@ CREATE TABLE SolarSystems (
     name TEXT,
     constellationId INTEGER,
     regionId INTEGER,
-    centerX REAL,
-    centerY REAL,
-    centerZ REAL,
+    centerX TEXT,
+    centerY TEXT,
+    centerZ TEXT,
     frost_line REAL,
     habitable_zone_inner REAL,
     habitable_zone_outer REAL,
@@ -276,9 +281,9 @@ CREATE TABLE Planets (
     planetId INTEGER PRIMARY KEY,
     solarSystemId INTEGER NOT NULL,
     typeId INTEGER,
-    centerX REAL,
-    centerY REAL,
-    centerZ REAL,
+    centerX TEXT,
+    centerY TEXT,
+    centerZ TEXT,
     FOREIGN KEY (solarSystemId) REFERENCES SolarSystems(solarSystemId)
 );
 
@@ -321,9 +326,9 @@ CREATE TABLE Moons (
     moonId INTEGER PRIMARY KEY,
     planetId INTEGER,
     solarSystemId INTEGER NOT NULL,
-    centerX REAL,
-    centerY REAL,
-    centerZ REAL,
+    centerX TEXT,
+    centerY TEXT,
+    centerZ TEXT,
     FOREIGN KEY (planetId) REFERENCES Planets(planetId),
     FOREIGN KEY (solarSystemId) REFERENCES SolarSystems(solarSystemId)
 );
@@ -364,9 +369,9 @@ CREATE TABLE NpcStations (
     stationId INTEGER PRIMARY KEY,
     solarSystemId INTEGER NOT NULL,
     typeId INTEGER,
-    centerX REAL,
-    centerY REAL,
-    centerZ REAL,
+    centerX TEXT,
+    centerY TEXT,
+    centerZ TEXT,
     FOREIGN KEY (solarSystemId) REFERENCES SolarSystems(solarSystemId)
 );
 
@@ -391,9 +396,9 @@ CREATE TABLE LagrangePoints (
     solarSystemId INTEGER NOT NULL,
     planetId INTEGER,
     pointType TEXT NOT NULL,
-    centerX REAL NOT NULL,
-    centerY REAL NOT NULL,
-    centerZ REAL NOT NULL,
+    centerX TEXT NOT NULL,
+    centerY TEXT NOT NULL,
+    centerZ TEXT NOT NULL,
     FOREIGN KEY (solarSystemId) REFERENCES SolarSystems(solarSystemId),
     FOREIGN KEY (planetId) REFERENCES Planets(planetId)
 );

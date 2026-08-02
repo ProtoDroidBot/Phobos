@@ -42,12 +42,12 @@ class SqliteMiner(BaseMiner):
 
     def get_data(self, container_name, language=None, verbose=False, **kwargs):
         try:
-            dbpath, table_name = self._contname_dbtable_map[container_name]
+            resource_info, table_name = self._contname_dbtable_map[container_name]
         except KeyError:
             self._container_not_found(container_name)
         else:
             rows = []
-            with sqlite3.connect(dbpath) as dbconn:
+            with sqlite3.connect(resource_info.file_abspath) as dbconn:
                 c = dbconn.cursor()
                 c.execute('select * from {}'.format(table_name))
                 headers = list(map(lambda x: x[0], c.description))
@@ -56,6 +56,15 @@ class SqliteMiner(BaseMiner):
                     rows.append(row)
             self._translator.translate_container(rows, language, verbose=verbose)
             return rows
+
+    def source_metadata(self, container_name):
+        pair = self._contname_dbtable_map.get(container_name)
+        if pair is None:
+            return None
+        resource_info, table_name = pair
+        result = self._file_info_metadata(resource_info)
+        result['table'] = table_name
+        return result
 
     @cachedproperty
     def _contname_dbtable_map(self):
@@ -75,5 +84,5 @@ class SqliteMiner(BaseMiner):
                 for row in c:
                     table_name = row[0]
                     container_name = '{}_{}'.format(resource_path[:-len(sqlite_ext)], table_name)
-                    contname_dbtable_map[container_name] = (resource_info.file_abspath, table_name)
+                    contname_dbtable_map[container_name] = (resource_info, table_name)
         return contname_dbtable_map

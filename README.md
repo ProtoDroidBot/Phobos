@@ -15,6 +15,40 @@ It doesn't mean that you should not use these miners. Generally speaking, if you
 
 * Python 3.12
 * 64-bit python built for Windows is needed to access data in FSD binary format
+* PyYAML 6.x (`python -m pip install -r requirements.txt`)
+
+### Python 2.7 client compatibility
+
+Phobos continues to run under Python 3.12 when reading clients whose packaged
+code and native loaders use Python 2.7. The legacy runtime is isolated from the
+main process:
+
+* `code.ccp` is opened as a ZIP archive and its zlib-compressed `.pyj` entries
+  are cached as their original Python 2.7 `.pyc` files under
+  `.phobos-runtime/<build>`.
+* Legacy `.static` files are decoded by a maintained Python 3 reader; client
+  bytecode is not imported into Python 3.
+* Generated `*Loader.pyd` modules run in a separate process using the matching
+  client `python27.dll` through `tools/py27host.exe`.
+* Python 2 pickles use a restricted unpickler. Binary values receive an
+  explicit lossless JSON representation.
+
+For build 3396210, use:
+
+```powershell
+python run.py -e G:\evejs3396210-2\client\EVE -s tq -j 3396210-001
+```
+
+Every run writes `_phobos_manifest.json` with client detection, backend,
+source MD5, size, and status for every container. Add `--strict` to fail the
+command if any requested container cannot be fetched or written.
+
+See [Legacy Python 2 Client Support](docs/LEGACY_PY27.md) for architecture,
+testing, worker-host build instructions, and the `planetResources` format.
+
+Decode the extracted `planetResources` coefficients into spherical grids and
+heatmaps with `tools/render_planet_resources.py`. The legacy-client guide
+documents the real spherical-harmonic convention and output archive.
 
 ### Arguments:
 
@@ -66,6 +100,11 @@ Create a database with custom paths:
 Create database and run a query:
 
     $ python generate.py --query "SELECT COUNT(*) FROM SolarSystems"
+
+Coordinate values are stored in the generated database as exact decimal
+`TEXT`, preserving the complete IEEE-754 double representation emitted by the
+FSD loader. Cast a coordinate explicitly for numeric calculations, for example
+`CAST(centerX AS REAL)`.
 
 ### Database Schema
 

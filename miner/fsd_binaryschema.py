@@ -30,15 +30,24 @@ from collections import ChainMap
 from miner.base import BaseMiner
 from util import EveNormalizer, cachedproperty
 from decimal import Decimal
+from exact_double import exact_double_text
+from compat.legacy_fsd import load_and_materialize
 
 class FsdBinaryMiner(BaseMiner):
     """Class, which fetches data from FSD Binary and Schema formatted static cache files."""
 
     name = 'fsd_binary_schema'
 
-    def __init__(self, resbrowser, translator):
+    def __init__(self, resbrowser, translator, client_profile=None):
         self._resbrowser = resbrowser
         self._translator = translator
+        self._client_profile = client_profile
+
+    @property
+    def backend_name(self):
+        if self._client_profile is not None and self._client_profile.is_legacy_py27:
+            return 'python3-legacy-fsd'
+        return 'python3-client-fsd'
 
     def contname_iter(self):
         for container_name in sorted(self._contname_respath_map):
@@ -46,6 +55,9 @@ class FsdBinaryMiner(BaseMiner):
 
     def fsd_parser(self, fsd_file_path, schema_path, container):
         #Bunch of preliminary things here and functions to aid us in processing the metric ton of FSD nested nonsense
+
+        if self._client_profile is not None and self._client_profile.is_legacy_py27:
+            return load_and_materialize(fsd_file_path, schema_path=schema_path)
         
         codeccp = self._resbrowser.get_file_info('app:/code.ccp').file_abspath
         sys.path.insert(0, codeccp)
@@ -65,7 +77,10 @@ class FsdBinaryMiner(BaseMiner):
             test1.append({"vector_schema": (raw_fsd.schema)})
             #test1.append({"vector_data": (raw_fsd.data)})
             for coordinate in raw_fsd.data:
-                test1.append(str(Decimal(coordinate)))
+                coordinate_text = exact_double_text(coordinate)
+                if coordinate_text is None:
+                    raise ValueError("unable to serialize non-finite FSD vector coordinate")
+                test1.append(coordinate_text)
             return test1
   
         # Function for repeated calls to format objectLoader variables. Please ensure you are calling this function with an object type = dictLoader.DictLoader
@@ -138,30 +153,29 @@ class FsdBinaryMiner(BaseMiner):
             return fsd_complete_merge
         
         #### THIS IS WHERE THE CODE ACTUALLY STARTS WORKING ####
-        pre_fsd_data = binLoader.LoadFSDDataInPython(fsd_file_path, schema_path, False, None)
-
+        if fsd_file_path:
+            pre_fsd_data = binLoader.LoadFSDDataInPython(fsd_file_path, schema_path, False, None)
+        else:
+            pre_fsd_data = container
         #test = []
         # If you see variables with test="??" here, it is a throwaway variable used to ensure we always get a return value. For some reason just having the three loader types with just the Binary FSD and index values didn't "actually return anything". IDK.
-
+        test = 0
         # Used for if the type of the parsed container is an FSD Dictionary Type, part of the dictLoader library, 
         if type(pre_fsd_data) == dictLoader.DictLoader:
 
             # It needs to be like this list=[{}], sorry. Otherwise I get this fun little error: "unable to write data with JsonWriter - TypeError: Object of type set is not JSON serializable"
             # Or does it!?
-            test="??"
             fsd_json_inter = (dictstuff(pre_fsd_data, str("FSD_DICT"), test))
             return (fsd_json_inter)
         
         # Used for if the type of the parsed container is an FSD Object, generic catchall for all entries labled with <FSD Object: (File path)>. Part of the objectLoader Library
         elif type(pre_fsd_data) == objectLoader.ObjectLoader:
-            test="??"
             fsd_json_inter = (objstuff(pre_fsd_data, str("FSD_OBJ"), test))
             return (fsd_json_inter)
 
         
         # Used for if the type of the parsed container is an FSD Index, part of the dictLoader Library
         elif type(pre_fsd_data) == dictLoader.IndexLoader:
-            test = "??"
             fsd_json_inter=[]
             for item in (pre_fsd_data.items()):
                 #fsd_json.append(str("FSD_ENTRY: ") + str(item[0]))
@@ -187,12 +201,12 @@ class FsdBinaryMiner(BaseMiner):
         
         # Used for if the type of the parsed container is an FSD Multi Index, part of the dictLoader Library. This one was an actual royal pain as it typically combines the dict, object, and vectorLoader Libraries in weird ways I haven't explored yet.
         elif type(pre_fsd_data) == dictLoader.MultiIndexLoader:
-            test = "??"
+
             fsd_json_inter=[]
             for item in (pre_fsd_data.items()):
                 #fsd_json.append(str("FSD_ENTRY: ") + str(item[0]))
 
-                print(item[0])
+                #print(item[0])
                 for items in item:
                     #print(items)
                     if type(items) == objectLoader.ObjectLoader:
@@ -207,12 +221,14 @@ class FsdBinaryMiner(BaseMiner):
                         fsd_json_inter.append({str(item[0]): vectorstuff(items, test)}) 
                     else:
                         #print(type(items))
-                        fsd_json_inter.append({str(item[0]): str(items)})
+                        #fsd_json_inter.append({str(item[0]): str(items)})
+                        pass
             return ({"Type: FSD Multi Index": fsd_json_inter})
             
         else: # This should never trigger except on ListLoader, and IndexLoader/MultiIndexLoader will error out the main loop anyway, so the data gets pushed to an alternate path
             # WIP WIP WIP, I need to read the spec for this ListLoader crap
             # Also there are two load strategies for ListLoader entries.
+
             fsd_json_inter = []
             try:
                 
@@ -220,7 +236,7 @@ class FsdBinaryMiner(BaseMiner):
                     # This works fine?
                     fsd_json_inter.extend((listItems))
                     items2 = "Entry"
-                    test = None
+
                     if type(listItems) == dictLoader.DictLoader:
                         #print(testing.schema['type'])
                         fsd_json_inter.append({str(listItems): (dictstuff(listItems, items2, test))})
@@ -240,7 +256,7 @@ class FsdBinaryMiner(BaseMiner):
                     # This does not work. :<
                     #fsd_json_inter.extend(str(listItems))
                     items2 = "Entry"
-                    test = None
+                        
                     if type(listItems) == dictLoader.DictLoader:
                         #print(testing.schema['type'])
                         fsd_json_inter.append({str(listItems): (dictstuff(listItems, items2, test))})
@@ -250,11 +266,12 @@ class FsdBinaryMiner(BaseMiner):
                         fsd_json_inter.append({str(listItems): (vectorstuff(listItems,test))})
                     elif type(listItems) == objectLoader.ObjectLoader:
                         #print(">")
-                        fsd_json_inter.append({str(listItems): (objstuff(listItems, items2, test))})
+                        fsd_json_inter.append({str(test): (objstuff(listItems, items2, test))})
                     else:
                         fsd_json_inter.append((str(listItems)))
-                        continue
+                    test += 1
             return ({"Type: FSD List": fsd_json_inter})
+        
            
 
 
@@ -282,6 +299,16 @@ class FsdBinaryMiner(BaseMiner):
         except KeyError:
             self._container_not_found(container_name)
         #schema_path = None
+
+    def source_metadata(self, container_name):
+        resource_path = self._contname_respath_map.get(container_name)
+        if resource_path is None:
+            return None
+        sources = [self._file_info_metadata(self._resbrowser.get_file_info(resource_path))]
+        schema_resource = self._schemaname_respath_map.get(container_name)
+        if schema_resource is not None:
+            sources.append(self._file_info_metadata(self._resbrowser.get_file_info(schema_resource)))
+        return sources
 
             
                 

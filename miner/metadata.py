@@ -63,3 +63,9 @@ class MetadataMiner(BaseMiner):
             timestamp = int(time())
             container_data.append({field_names[0]: 'dump_time', field_names[1]: timestamp})
             return tuple(container_data)
+
+    def source_metadata(self, container_name):
+        if container_name != self._container_name:
+            return None
+        resource_path = self._resbrowser.find_resource_path('start.ini', prefix='app:/')
+        return self._file_info_metadata(self._resbrowser.get_file_info(resource_path))

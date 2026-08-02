@@ -75,23 +75,27 @@ python generate.py -o starmap.db -p ./output
 
 **Database Schema**:
 
+Coordinate columns use decimal `TEXT` rather than SQLite `REAL`. This preserves
+the complete decimal form of each source double. Use an explicit expression
+such as `CAST(centerX AS REAL)` when a query requires numeric arithmetic.
+
 **Regions** table:
 - `regionId` (INTEGER PRIMARY KEY)
 - `name` (TEXT)
-- `centerX`, `centerY`, `centerZ` (REAL) - Region center coordinates
+- `centerX`, `centerY`, `centerZ` (TEXT) - Exact region center coordinates
 
 **Constellations** table:
 - `constellationId` (INTEGER PRIMARY KEY)
 - `name` (TEXT)
 - `regionId` (INTEGER) - Foreign key to Regions
-- `centerX`, `centerY`, `centerZ` (REAL) - Constellation center
+- `centerX`, `centerY`, `centerZ` (TEXT) - Exact constellation center
 
 **SolarSystems** table:
 - `solarSystemId` (INTEGER PRIMARY KEY)
 - `name` (TEXT)
 - `constellationId` (INTEGER) - Foreign key to Constellations
 - `regionId` (INTEGER) - Foreign key to Regions
-- `x`, `y`, `z` (REAL) - System coordinates
+- `centerX`, `centerY`, `centerZ` (TEXT) - Exact system coordinates
 - `security` (REAL) - Security status
 - `radius` (REAL) - System radius
 - `luminosity` (REAL) - Star luminosity
@@ -112,26 +116,26 @@ python generate.py -o starmap.db -p ./output
 - `planetId` (INTEGER PRIMARY KEY)
 - `solarSystemId` (INTEGER)
 - `typeId` (INTEGER)
-- `x`, `y`, `z` (REAL) - Planet coordinates
+- `centerX`, `centerY`, `centerZ` (TEXT) - Exact planet coordinates
 
 **Moons** table:
 - `moonId` (INTEGER PRIMARY KEY)
 - `planetId` (INTEGER)
 - `solarSystemId` (INTEGER)
-- `x`, `y`, `z` (REAL) - Moon coordinates
+- `centerX`, `centerY`, `centerZ` (TEXT) - Exact moon coordinates
 
 **NpcStations** table:
 - `stationId` (INTEGER PRIMARY KEY)
 - `solarSystemId` (INTEGER)
 - `typeId` (INTEGER)
-- `x`, `y`, `z` (REAL) - Station coordinates
+- `centerX`, `centerY`, `centerZ` (TEXT) - Exact station coordinates
 
 **LagrangePoints** table:
 - `lagrangePointId` (INTEGER PRIMARY KEY AUTOINCREMENT)
 - `solarSystemId` (INTEGER)
 - `planetId` (INTEGER)
 - `pointType` (TEXT) - L1, L2, L3, L4, L5
-- `x`, `y`, `z` (REAL) - Lagrange point coordinates
+- `centerX`, `centerY`, `centerZ` (TEXT) - Exact Lagrange point coordinates
 
 **Types** table:
 - `typeId` (INTEGER PRIMARY KEY)

@@ -18,11 +18,13 @@
 #===============================================================================
 
 
-import pickle
-
 from miner.base import BaseMiner
 from util import cachedproperty
-
+from compat.pickle_compat import (
+    decode_planet_resources,
+    is_planet_resources_container,
+    load_legacy_pickle,
+)
 
 class PickleMiner(BaseMiner):
     """Class, which attempts to get data from resource pickles (which is not guaranteed to succeed)."""
@@ -43,8 +45,16 @@ class PickleMiner(BaseMiner):
             self._container_not_found(container_name)
         else:
             resource_data = self._resbrowser.get_file_data(resource_path)
-            data = pickle.loads(resource_data)
-            return data
+            if is_planet_resources_container(container_name):
+                data = load_legacy_pickle(resource_data, preserve_bytes=True)
+                return decode_planet_resources(data)
+            return load_legacy_pickle(resource_data)
+
+    def source_metadata(self, container_name):
+        resource_path = self._contname_respath_map.get(container_name)
+        if resource_path is None:
+            return None
+        return self._file_info_metadata(self._resbrowser.get_file_info(resource_path))
 
     @cachedproperty
     def _contname_respath_map(self):

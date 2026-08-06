@@ -18,21 +18,25 @@
 #===============================================================================
 
 
-import codecs
 import json
 import os.path
 import re
-import types
 from collections import OrderedDict
-from itertools import izip_longest
 
 from .base import BaseWriter
 
 
-def natural_sort(i):
-    if isinstance(i, (str, unicode)):
-        return [int(text) if text.isdigit() else text.lower() for text in re.split('([0-9]+)', i)]
-    return i
+def _stringify(value):
+    if isinstance(value, bytes):
+        return value.decode('cp1252')
+    return str(value)
+
+
+def natural_sort(value):
+    """Return a uniformly comparable, case-insensitive natural sort key."""
+    return tuple(
+        (1, int(part)) if part.isdigit() else (0, part.casefold())
+        for part in re.split(r'(\d+)', _stringify(value)))
 
 
 class CustomEncoder(json.JSONEncoder):
@@ -41,13 +45,9 @@ class CustomEncoder(json.JSONEncoder):
     are implemented in this class.
     """
 
-    def encode(self, obj, *args, **kwargs):
-        obj = self._route_object(obj)
-        return json.JSONEncoder.encode(self, obj, *args, **kwargs)
-
     def iterencode(self, obj, *args, **kwargs):
         obj = self._route_object(obj)
-        return json.JSONEncoder.iterencode(self, obj, *args, **kwargs)
+        return super().iterencode(obj, *args, **kwargs)
 
     def _route_object(self, obj):
         obj_type = type(obj)
@@ -63,11 +63,7 @@ class CustomEncoder(json.JSONEncoder):
         Traverse through dict items first, then convert
         keys to strings.
         """
-        new_obj = {}
-        for k, v in obj.items():
-            new_obj[self._route_object(k)] = self._route_object(v)
-        new_obj = self._prepare_map(new_obj)
-        return new_obj
+        return self._prepare_map(obj)
 
     def _traverse_iterable(self, obj):
         new_obj = []
@@ -76,9 +72,9 @@ class CustomEncoder(json.JSONEncoder):
         return new_obj
 
     _traversal_map = {
-        types.DictType: _traverse_map,
-        types.TupleType: _traverse_iterable,
-        types.ListType: _traverse_iterable}
+        dict: _traverse_map,
+        tuple: _traverse_iterable,
+        list: _traverse_iterable}
 
     def _prepare_map(self, obj):
         """
@@ -88,7 +84,7 @@ class CustomEncoder(json.JSONEncoder):
         """
         new_obj = OrderedDict()
         for k in sorted(obj.keys(), key=natural_sort):
-            new_obj[unicode(k)] = obj[k]
+            new_obj[_stringify(k)] = self._route_object(obj[k])
         return new_obj
 
 
@@ -106,8 +102,7 @@ class JsonWriter(BaseWriter):
     def write(self, miner_name, container_name, container_data):
         # Create folder structure to path, if not created yet
         folder = os.path.join(self.base_folder, self.__secure_name(miner_name))
-        if not os.path.exists(folder):
-            os.makedirs(folder, mode=0o755)
+        os.makedirs(folder, mode=0o755, exist_ok=True)
 
         data_type = type(container_data)
         grouping_method = self._grouping_map.get(data_type)
@@ -140,12 +135,12 @@ class JsonWriter(BaseWriter):
             yield group_data
 
     _grouping_map = {
-        types.DictType: _group_dict,
-        types.TupleType: _group_list,
-        types.ListType: _group_list}
+        dict: _group_dict,
+        tuple: _group_list,
+        list: _group_list}
 
     def __write_file(self, data, filepath):
-        with codecs.open(filepath, 'wb', encoding='utf-8') as f:
+        with open(filepath, 'w', encoding='utf-8', newline='\n') as f:
             json.dump(
                 data,
                 f,

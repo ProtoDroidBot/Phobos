@@ -102,7 +102,7 @@ class ResourceBrowser(object):
     def _resource_index(self):
         index = {}
         res_index_path = os.path.join(self._eve_path, self._server_alias, 'resfileindex.txt')
-        with open(res_index_path) as f:
+        with open(res_index_path, encoding='utf-8-sig', newline='') as f:
             for resource_path, file_relpath, file_hash, file_size, compressed_size in csv.reader(f):
                 index[resource_path] = FileInfo(
                     resource_path=resource_path,
@@ -112,7 +112,7 @@ class ResourceBrowser(object):
                     file_size=int(file_size),
                     compressed_size=int(compressed_size))
         app_index_path = os.path.join(self._eve_path, u'index_{}.txt'.format(get_full_alias(self._server_alias)))
-        with open(app_index_path) as f:
+        with open(app_index_path, encoding='utf-8-sig', newline='') as f:
             for resource_path, file_relpath, file_hash, file_size, compressed_size, version in csv.reader(f):
                 index[resource_path] = FileInfo(
                     resource_path=resource_path,

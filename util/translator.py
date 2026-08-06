@@ -19,7 +19,6 @@
 
 
 import re
-import types
 
 from miner import ContainerNameError
 
@@ -110,9 +109,9 @@ class Translator(object):
             self._route_object(item, language, spec, stats)
 
     _translation_map = {
-        types.DictType: _translate_map,
-        types.TupleType: _translate_iterable,
-        types.ListType: _translate_iterable
+        dict: _translate_map,
+        tuple: _translate_iterable,
+        list: _translate_iterable
     }
 
     def __translation_multimode(self, row, text_fname, msgid, orig_text, stats):
@@ -169,17 +168,19 @@ class Translator(object):
             # whose value contains message ID, and after that
             # we do few verification steps to confirm/deny this
             # claim
-            for msgid_fname in row.keys():
+            # Translation adds fields to this dictionary, so iterate over a
+            # snapshot of the original keys.
+            for msgid_fname in list(row):
                 # It must be string in '<field name>ID' format, skip current
                 # field name if it's not the case
-                if isinstance(msgid_fname, types.StringTypes) is False:
+                if not isinstance(msgid_fname, str):
                     continue
                 tail = msgid_fname[-len(suffix):]
                 if tail != suffix:
                     continue
                 # Message ID can None or integer
                 msgid = row[msgid_fname]
-                if msgid is not None and isinstance(msgid, (types.IntType, types.LongType)) is False:
+                if msgid is not None and not isinstance(msgid, int):
                     continue
                 # There're 2 conventions which CCP use for text and message fields:
                 # 1) There're pair of fields named like fieldName / fieldNameID pair
@@ -190,7 +191,7 @@ class Translator(object):
                 if text_fname in row:
                     # Text can be string or None
                     text = row[text_fname]
-                    if text is not None and isinstance(text, types.StringTypes) is False:
+                    if text is not None and not isinstance(text, str):
                         continue
                     # If both text and message ID are None, skip them to avoid
                     # unnecessary translations (which can convert None to empty
@@ -318,7 +319,7 @@ class Translator(object):
                 substitution = kwargs[arg_name]
             except KeyError:
                 continue
-            text = text.replace(tok_name, unicode(substitution))
+            text = text.replace(tok_name, str(substitution))
         return text
 
     @property

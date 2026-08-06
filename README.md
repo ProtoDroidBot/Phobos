@@ -7,7 +7,7 @@ It uses collection of data miners which extract data from files of various forma
 Some data miners process executable or serialized client data and should be
 treated carefully:
  
-- ResourcePickleMiner: [unpickles](https://docs.python.org/2.7/library/pickle.html) serialized python files
+- PickleMiner: [unpickles](https://docs.python.org/3.12/library/pickle.html) serialized Python files
 - FsdBinaryMiner: parses schema-driven `.static` FSD binary files without loading client code
 - FsdBuiltMiner: executes native loaders provided by the EVE client for `.fsdbinary` files
  
@@ -15,23 +15,32 @@ It doesn't mean that you should not use these miners. Generally speaking, if you
 
 ### Requirements
 
-* Python 2.7
-* 64-bit Python built for Windows is needed for FSD Built `.fsdbinary` loaders
+* Python 3.12
+* 64-bit CPython 3.12 on Windows is needed for native FSD Built `.fsdbinary` loaders
 * Dependencies from `requirements.txt` (`PyYAML` is used for external `.schema` files)
 
-Install dependencies with `pip install -r requirements.txt`.
+The native `.pyd` loaders shipped with the client must target CPython 3.12.
+EVE Frontier's current loaders do; historical EVE Online loaders linked against
+Python 2.7 and are not supported by this version of Phobos.
+
+Install dependencies with `py -3.12 -m pip install -r requirements.txt`.
 
 ### Arguments:
 
-* `--eve`: Required. Path to EVE client folder, e.g. `C:\CCP\EVE Online`.
+* `--eve`: Required. Path to the EVE Frontier client folder, e.g. `C:\CCP\EVE Frontier`.
 * `--json`: Required. Output folder for JSON files.
-* `--server`: Optional. Server to pull data from. Defaults to `tq`. Other options are `sisi`, `thunderdome` and `serenity`.
+* `--server`: Optional. Server to pull data from. Defaults to `stillness`; `utopia` is also supported.
 * `--translate`: Optional. Specifies language to which strings will be translated. You can choose either individual languages (run script with `--help` argument for a list) or 'multi' option. For individual language, translation will be done in-place (replaces original text with localized text), for multi-language translation, original text is not modified, but new text fields are added, named using `<field name>_<language code>` convention (e.g. `typeName_en-us`). Multi-language translation mode is default.
 * `--list`: Optional. Specifies list of comma-separated 'containers' to extract. It uses names the script prints to stdout. For list of all available names you can launch script without specifying this option, as by default it extracts everything it can find.
+* `--group`: Optional. Splits each top-level container across files containing at most this many entries.
 
 ### Example
 
-    $ python run.py --eve=E:\eve\client\ --json=~\Desktop\phobos_tq_en-us --list="evetypes, marketgroups, metadata"
+    py -3.12 run.py --eve="C:\CCP\EVE Frontier" --json="C:\dumps\phobos-stillness" --list="categories,metadata"
+
+### Verification
+
+    py -3.12 -m unittest discover -s tests -v
 
 ### Phobos-specific data
 Besides raw data Phobos pulls from client, it provides two custom containers.

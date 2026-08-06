@@ -47,17 +47,6 @@ from util import cachedproperty
 from .base import BaseMiner
 
 
-try:
-    long
-except NameError:  # pragma: no cover - Python 3 compatibility for tests
-    long = int
-
-try:
-    unicode
-except NameError:  # pragma: no cover - Python 3 compatibility for tests
-    unicode = str
-
-
 _U8 = struct.Struct('<B')
 _U16 = struct.Struct('<H')
 _U32 = struct.Struct('<I')
@@ -176,13 +165,9 @@ class _RestrictedSchemaUnpickler(pickle.Unpickler):
         raise pickle.UnpicklingError(
             'embedded FSD schema requested forbidden global {}.{}'.format(module, name))
 
-    # Python 2's pure-Python pickle implementation uses find_global.
-    find_global = find_class
-
-
 def _validate_schema_graph(root):
     """Ensure a decoded schema contains data containers and primitives only."""
-    primitive_types = (type(None), bool, int, long, float, str, unicode)
+    primitive_types = (type(None), bool, int, float, str)
     containers = (dict, collections.OrderedDict, list, tuple)
     stack = [root]
     seen = set()
@@ -212,11 +197,9 @@ def _validate_schema_graph(root):
 def _load_embedded_schema(raw_schema):
     stream = io.BytesIO(raw_schema)
     try:
-        try:
-            loader = _RestrictedSchemaUnpickler(stream, encoding='latin-1')
-        except TypeError:  # Python 2 Unpickler has no encoding argument
-            stream.seek(0)
-            loader = _RestrictedSchemaUnpickler(stream)
+        # The client still embeds schemas serialized by Python 2. Latin-1
+        # preserves every legacy byte value while producing Python 3 strings.
+        loader = _RestrictedSchemaUnpickler(stream, encoding='latin-1')
         schema = loader.load()
     except FsdSchemaError:
         raise
@@ -525,7 +508,7 @@ class _OptimizedFooter(object):
                 return offset, size
         return None
 
-    def iteritems(self):
+    def items(self):
         for index in range(self._count):
             key, offset, size = self._unpack_item(index)
             yield key, (offset, size)
@@ -559,7 +542,7 @@ class _GenericFooter(object):
                 return item['offset'], size
         return None
 
-    def iteritems(self):
+    def items(self):
         for item in self._items:
             try:
                 size = item['size']
@@ -579,12 +562,9 @@ def _create_footer(schema, footer_data, path, state):
 
 class _MappingValue(object):
 
-    def iterkeys(self):
-        for key, unused in self._footer.iteritems():
-            yield key
-
     def __iter__(self):
-        return self.iterkeys()
+        for key, unused in self._footer.items():
+            yield key
 
     def __len__(self):
         return len(self._footer)
@@ -602,13 +582,13 @@ class _MappingValue(object):
             return default
 
     def keys(self):
-        return list(self.iterkeys())
+        return iter(self)
 
     def values(self):
-        return [value for unused, value in self.iteritems()]
+        return (value for unused, value in self.items())
 
     def items(self):
-        return list(self.iteritems())
+        return self._iter_items()
 
 
 class _DictValue(_MappingValue):
@@ -642,8 +622,8 @@ class _DictValue(_MappingValue):
             raise KeyError('key {!r} not found at {}'.format(key, self._path))
         return self._value_at(key, found[0])
 
-    def iteritems(self):
-        for key, offset_and_size in self._footer.iteritems():
+    def _iter_items(self):
+        for key, offset_and_size in self._footer.items():
             yield key, self._value_at(key, offset_and_size[0])
 
 
@@ -727,8 +707,8 @@ class _IndexValue(_MappingValue):
             self._cache[key] = value
         return value
 
-    def iteritems(self):
-        for key, offset_and_size in self._footer.iteritems():
+    def _iter_items(self):
+        for key, offset_and_size in self._footer.items():
             yield key, self._value_at(
                 key, offset_and_size[0], offset_and_size[1])
 
@@ -786,14 +766,14 @@ class _SubIndexValue(_MappingValue):
     def __len__(self):
         return sum(len(footer) for footer in self._footers.values())
 
-    def iterkeys(self):
+    def __iter__(self):
         for footer in self._footers.values():
-            for key, unused in footer.iteritems():
+            for key, unused in footer.items():
                 yield key
 
-    def iteritems(self):
+    def _iter_items(self):
         for index_id, footer in self._footers.items():
-            for key, unused in footer.iteritems():
+            for key, unused in footer.items():
                 yield key, self._value_from_index(key, index_id)
 
 
@@ -818,7 +798,7 @@ class _MultiIndexValue(_IndexValue):
             path.child('<MultiIndexAttributes>'))
 
         nested_footers = {}
-        for index_id, offset_info in lookup.iteritems():
+        for index_id, offset_info in lookup.items():
             nested_offset = offset_to_data + offset_info['offset']
             nested_size = offset_info['size']
             nested_data = _read_exact_at(
@@ -877,11 +857,9 @@ for _integer_schema_type in _INTEGER_SCHEMA_TYPES:
 
 
 def _materialize(value):
-    if value is None or isinstance(value, (bool, int, long, float, unicode)):
+    if value is None or isinstance(value, (bool, int, float, str)):
         return value
-    # On Python 2, binary strings are distinct from unicode.  FSD string
-    # loaders normally decode them before this point, but schema defaults may
-    # still be byte strings.
+    # Schema defaults may still be byte strings.
     if isinstance(value, bytes):
         return _decode_cp1252(value, '<schema default>')
     if isinstance(value, _VectorValue):
@@ -899,7 +877,7 @@ def _materialize(value):
         return result
     if isinstance(value, (_DictValue, _IndexValue, _MultiIndexValue, _SubIndexValue)):
         result = {}
-        for key, item in value.iteritems():
+        for key, item in value.items():
             result[_materialize(key)] = _materialize(item)
         return result
     if isinstance(value, (dict, collections.OrderedDict)):

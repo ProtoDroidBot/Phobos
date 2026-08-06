@@ -51,8 +51,13 @@ class FsdBuiltMiner(BaseMiner):
         except KeyError:
             self._container_not_found(container_name)
         else:
-            if os.name != 'nt' or struct.calcsize('P') * 8 != 64:
-                msg = 'need 64-bit python under Windows to execute loader'
+            if (
+                os.name != 'nt' or
+                struct.calcsize('P') * 8 != 64 or
+                sys.implementation.name != 'cpython' or
+                sys.version_info[:2] != (3, 12)
+            ):
+                msg = 'need 64-bit CPython 3.12 on Windows to execute loader'
                 raise PlatformError(msg)
             loader_filename = loader_respath.split('/')[-1]
             loader_info = self._resbrowser.get_file_info(loader_respath)
@@ -60,20 +65,32 @@ class FsdBuiltMiner(BaseMiner):
 
             with self._temp_dir() as temp_dir:
                 sys.path.insert(0, temp_dir)
-
-                loader_dest = os.path.join(temp_dir, loader_filename)
-                if not os.path.isfile(loader_dest) or not self._compare_files(loader_info.file_abspath, loader_dest):
-                    shutil.copyfile(loader_info.file_abspath, loader_dest)
-
                 loader_modname = os.path.splitext(loader_filename)[0]
-                loader_module = importlib.import_module(loader_modname)
-                fsd_data = loader_module.load(data_info.file_abspath)
-                normalized_data = EveNormalizer().run(fsd_data, loader_module=loader_module)
+                previous_module = sys.modules.pop(loader_modname, None)
+                loader_module = None
+                fsd_data = None
+                try:
+                    loader_dest = os.path.join(temp_dir, loader_filename)
+                    if (
+                        not os.path.isfile(loader_dest) or
+                        not self._compare_files(loader_info.file_abspath, loader_dest)
+                    ):
+                        shutil.copyfile(loader_info.file_abspath, loader_dest)
+                    importlib.invalidate_caches()
 
-                sys.path.remove(temp_dir)
-                del loader_module
-                del sys.modules[loader_modname]
-                gc.collect()
+                    loader_module = importlib.import_module(loader_modname)
+                    fsd_data = loader_module.load(data_info.file_abspath)
+                    normalized_data = EveNormalizer().run(
+                        fsd_data, loader_module=loader_module)
+                finally:
+                    if temp_dir in sys.path:
+                        sys.path.remove(temp_dir)
+                    sys.modules.pop(loader_modname, None)
+                    if previous_module is not None:
+                        sys.modules[loader_modname] = previous_module
+                    loader_module = None
+                    fsd_data = None
+                    gc.collect()
 
             self._translator.translate_container(normalized_data, language, verbose=verbose)
             return normalized_data

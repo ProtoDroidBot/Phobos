@@ -19,8 +19,8 @@
 
 
 import inspect
-import types
 from collections import OrderedDict
+from collections.abc import Mapping
 
 
 class EveNormalizer(object):
@@ -70,7 +70,13 @@ class EveNormalizer(object):
         # Try to find parent class for passed object, and if we
         # have any in our records - run handler for it
         for candidate_cls in self._subclass_match:
-            if isinstance(obj, candidate_cls):
+            try:
+                parent_match = isinstance(obj, candidate_cls)
+            # Some native EVE objects implement unusual class hooks. If a
+            # protocol check fails, continue to the loader-specific routing.
+            except Exception:
+                continue
+            if parent_match:
                 method = self._subclass_match[candidate_cls]
                 return method(self, obj)
         # Stuff specific to FSD binary format
@@ -104,18 +110,16 @@ class EveNormalizer(object):
         dictionaries - convert keys and values and return as dict.
         """
         container = {}
-        for key, value in obj.iteritems():
+        for key, value in obj.items():
             proc_key = self._route_object(key)
             proc_value = self._route_object(value)
             container[proc_key] = proc_value
         return container
 
-    def _pythonize_string(self, obj):
+    def _pythonize_bytes(self, obj):
         """
-        Sometimes EVE has non-ASCII symbols in non-unicode strings,
-        default encoding for these is cp1252, here we ensure they are
-        converted to unicode so we don't have to run any additional
-        processing on them elsewhere.
+        Decode byte strings emitted by native loaders. EVE's legacy byte
+        string encoding is Windows-1252.
         """
         return obj.decode('cp1252')
 
@@ -161,21 +165,25 @@ class EveNormalizer(object):
                 continue
             if attr_name in ignore_attrs:
                 continue
-            item[attr_name] = self._route_object(getattr(obj, attr_name))
+            value = getattr(obj, attr_name)
+            if callable(value):
+                continue
+            item[attr_name] = self._route_object(value)
         return item
 
     _primitives = (
-        types.NoneType,
-        types.BooleanType,
-        types.FloatType,
-        types.IntType,
-        types.LongType,
-        types.UnicodeType)
+        type(None),
+        bool,
+        float,
+        int,
+        str)
 
     _class_match = {
-        types.StringType: _pythonize_string,
-        types.ListType: _pythonize_iterable,
-        types.TupleType: _pythonize_iterable}
+        bytes: _pythonize_bytes,
+        bytearray: _pythonize_bytes,
+        dict: _pythonize_map,
+        list: _pythonize_iterable,
+        tuple: _pythonize_iterable}
 
     _name_match = {
         # FSD-related classes
@@ -193,7 +201,7 @@ class EveNormalizer(object):
 
     _subclass_match = OrderedDict([
         # Includes dictionaries and FSDLiteStorage
-        (types.DictType, _pythonize_map)])
+        (Mapping, _pythonize_map)])
 
 
 class UnknownContainerTypeError(Exception):

@@ -28,6 +28,16 @@ Install dependencies with `pip install -r requirements.txt`.
 * `--server`: Optional. Server to pull data from. Defaults to `tq`. Other options are `sisi`, `thunderdome` and `serenity`.
 * `--translate`: Optional. Specifies language to which strings will be translated. You can choose either individual languages (run script with `--help` argument for a list) or 'multi' option. For individual language, translation will be done in-place (replaces original text with localized text), for multi-language translation, original text is not modified, but new text fields are added, named using `<field name>_<language code>` convention (e.g. `typeName_en-us`). Multi-language translation mode is default.
 * `--list`: Optional. Specifies list of comma-separated 'containers' to extract. It uses names the script prints to stdout. For list of all available names you can launch script without specifying this option, as by default it extracts everything it can find.
+* `--group`: Optional. Splits ordinary top-level containers across files containing at most this many entries.
+
+When `solarsystemcontent` is extracted, each solar system's `planets` field
+contains only its numeric planet IDs. The full planet records are normalized,
+translated, and streamed to `fsd_binary/planets.json`, keyed by planet ID.
+Within those planet records, `moons` contains only numeric moon IDs; the full
+normalized and translated moon records are streamed to
+`fsd_binary/moons.json`, keyed by moon ID. Neither output adds a `_key` field.
+Both dedicated files are single JSON dictionaries and are not split by
+`--group`.
 
 ### Example
 

@@ -18,13 +18,18 @@
 #===============================================================================
 
 
-from .json_writer import JsonWriter
-from .moons_writer import MoonsWriter
-from .planets_writer import PlanetsWriter
+"""Incremental JSON writer for moons extracted from planet records."""
 
 
-__all__ = (
-    'JsonWriter',
-    'MoonsWriter',
-    'PlanetsWriter',
-)
+from .streaming_dict_writer import _StreamingDictWriter
+
+
+class MoonsWriter(_StreamingDictWriter):
+    """Create an atomic, incrementally written ``moons.json`` file."""
+
+    def __init__(self, base_folder, translator, indent=2):
+        super().__init__(
+            base_folder=base_folder,
+            translator=translator,
+            entity_name='moon',
+            indent=indent)

@@ -34,6 +34,14 @@ Install dependencies with `py -3.12 -m pip install -r requirements.txt`.
 * `--list`: Optional. Specifies list of comma-separated 'containers' to extract. It uses names the script prints to stdout. For list of all available names you can launch script without specifying this option, as by default it extracts everything it can find.
 * `--group`: Optional. Splits each top-level container across files containing at most this many entries.
 
+When `solarsystemcontent` is extracted, each system's `planets` field contains
+only its numeric planet IDs. The full planet records are normalized,
+translated, and written incrementally to `fsd_binary/planets.json`, keyed by
+planet ID. Within those records, `moons` contains only numeric moon IDs; the
+full normalized and translated moon records are written incrementally to
+`fsd_binary/moons.json`, keyed by moon ID. Both dedicated files are single JSON
+dictionaries and are not split by `--group`.
+
 ### Example
 
     py -3.12 run.py --eve="C:\CCP\EVE Frontier" --json="C:\dumps\phobos-stillness" --list="categories,metadata"

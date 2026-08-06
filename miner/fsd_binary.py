@@ -856,7 +856,15 @@ for _integer_schema_type in _INTEGER_SCHEMA_TYPES:
     _STATE.factories[_integer_schema_type] = _load_int
 
 
-def _materialize(value):
+def _materialize(value, field_handlers=None):
+    """Convert an FSD value to Python built-ins.
+
+    ``field_handlers`` may replace selected object attributes while they are
+    being decoded.  A handler receives the raw attribute value and returns
+    the value to retain in the materialized parent object.  This lets large
+    nested indexes be consumed incrementally instead of first building a
+    second in-memory copy of them.
+    """
     if value is None or isinstance(value, (bool, int, float, str)):
         return value
     # Schema defaults may still be byte strings.
@@ -867,26 +875,38 @@ def _materialize(value):
         if aliases:
             result = {}
             for name, index in aliases.items():
-                result[_materialize(name)] = _materialize(value.values[index])
+                result[_materialize(name, field_handlers)] = _materialize(
+                    value.values[index], field_handlers)
             return result
-        return tuple(_materialize(item) for item in value.values)
+        return tuple(_materialize(item, field_handlers) for item in value.values)
     if isinstance(value, _FsdObject):
         result = {}
         for name, item in value.present_items():
-            result[_materialize(name)] = _materialize(item)
+            materialized_name = _materialize(name, field_handlers)
+            handler = (
+                field_handlers.get(materialized_name)
+                if field_handlers is not None
+                else None)
+            if handler is None:
+                materialized_item = _materialize(item, field_handlers)
+            else:
+                materialized_item = handler(item)
+            result[materialized_name] = materialized_item
         return result
     if isinstance(value, (_DictValue, _IndexValue, _MultiIndexValue, _SubIndexValue)):
         result = {}
         for key, item in value.items():
-            result[_materialize(key)] = _materialize(item)
+            result[_materialize(key, field_handlers)] = _materialize(
+                item, field_handlers)
         return result
     if isinstance(value, (dict, collections.OrderedDict)):
         result = {}
         for key, item in value.items():
-            result[_materialize(key)] = _materialize(item)
+            result[_materialize(key, field_handlers)] = _materialize(
+                item, field_handlers)
         return result
     if isinstance(value, (list, tuple)):
-        return tuple(_materialize(item) for item in value)
+        return tuple(_materialize(item, field_handlers) for item in value)
     raise FsdFormatError(
         'unable to materialize FSD value of type {}'.format(type(value).__name__))
 
@@ -910,28 +930,33 @@ def _read_schema_and_offset(stream, schema_path, data_path):
     return _load_embedded_schema(raw_schema), _U32.size + schema_size
 
 
-def _load_with_schema(stream, schema, data_offset, data_path, cache_size):
+def _load_with_schema(
+        stream, schema, data_offset, data_path, cache_size,
+        field_handlers=None):
     path = _FsdPath('<{}>'.format(data_path))
     if schema.get('type') == 'dict' and schema.get('buildIndex', False):
         index_class = _MultiIndexValue if schema.get('multiIndex', False) else _IndexValue
         root = index_class(
             stream, cache_size, schema, path, _STATE,
             offset_to_data=data_offset)
-        return _materialize(root)
+        return _materialize(root, field_handlers=field_handlers)
 
     mapping = mmap.mmap(stream.fileno(), 0, access=mmap.ACCESS_READ)
     try:
         root = _STATE.represent(mapping, data_offset, schema, path)
-        return _materialize(root)
+        return _materialize(root, field_handlers=field_handlers)
     finally:
         mapping.close()
 
 
-def load_fsd_file(data_path, schema_path=None, cache_size=100):
+def load_fsd_file(
+        data_path, schema_path=None, cache_size=100, field_handlers=None):
     """Parse one FSD ``.static`` file into Python built-in values.
 
     ``schema_path`` should name an already optimized YAML schema.  If it is
     omitted, the optimized schema is read from the data file's prefix.
+    ``field_handlers`` can be used to consume and replace selected object
+    attributes during materialization.
     """
     if cache_size is None:
         cache_size = 100
@@ -941,7 +966,8 @@ def load_fsd_file(data_path, schema_path=None, cache_size=100):
         schema, data_offset = _read_schema_and_offset(
             stream, schema_path, data_path)
         return _load_with_schema(
-            stream, schema, data_offset, data_path, cache_size)
+            stream, schema, data_offset, data_path, cache_size,
+            field_handlers=field_handlers)
 
 
 class FsdBinaryMiner(BaseMiner):
@@ -949,10 +975,18 @@ class FsdBinaryMiner(BaseMiner):
 
     name = 'fsd_binary'
 
-    def __init__(self, resbrowser, translator, cache_size=100):
+    _SOLAR_SYSTEM_CONTENT_NAMES = frozenset((
+        'solarsystemcontent',
+        'solarsystemscontent',
+    ))
+
+    def __init__(
+            self, resbrowser, translator, cache_size=100,
+            planets_writer=None):
         self._resbrowser = resbrowser
         self._translator = translator
         self._cache_size = cache_size
+        self._planets_writer = planets_writer
 
     def contname_iter(self):
         for container_name in sorted(self._contname_respath_map):
@@ -972,9 +1006,29 @@ class FsdBinaryMiner(BaseMiner):
             schema_path = self._resbrowser.get_file_info(
                 schema_resource).file_abspath
 
-        data = load_fsd_file(
-            data_info.file_abspath, schema_path=schema_path,
-            cache_size=self._cache_size)
+        load_kwargs = {
+            'schema_path': schema_path,
+            'cache_size': self._cache_size,
+        }
+        if (
+            self._planets_writer is not None and
+            container_name.lower() in self._SOLAR_SYSTEM_CONTENT_NAMES
+        ):
+            with self._planets_writer.stream(
+                    miner_name=self.name,
+                    container_name='planets',
+                    language=language,
+                    normalizer=_materialize) as planet_stream:
+                load_kwargs['field_handlers'] = {
+                    'planet': planet_stream.write_mapping,
+                    'planets': planet_stream.write_mapping,
+                }
+                data = load_fsd_file(data_info.file_abspath, **load_kwargs)
+                self._translator.translate_container(
+                    data, language, verbose=verbose)
+            return data
+
+        data = load_fsd_file(data_info.file_abspath, **load_kwargs)
         self._translator.translate_container(data, language, verbose=verbose)
         return data
 

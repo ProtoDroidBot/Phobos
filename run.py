@@ -51,7 +51,7 @@ from miner import (
     TraitMiner,
 )
 from util import ResourceBrowser, Translator
-from writer import JsonWriter
+from writer import JsonWriter, MoonsWriter, PlanetsWriter
 
 
 def run(path_eve, server_alias, filter_string, language, path_json, group=None):
@@ -59,7 +59,18 @@ def run(path_eve, server_alias, filter_string, language, path_json, group=None):
 
     pickle_miner = PickleMiner(resbrowser=resource_browser)
     trans = Translator(pickle_miner=pickle_miner)
-    fsdbinary_miner = FsdBinaryMiner(resbrowser=resource_browser, translator=trans)
+    moons_writer = MoonsWriter(path_json, translator=trans, indent=2)
+    planets_writer = PlanetsWriter(
+        path_json,
+        translator=trans,
+        indent=2,
+        moons_writer=moons_writer,
+    )
+    fsdbinary_miner = FsdBinaryMiner(
+        resbrowser=resource_browser,
+        translator=trans,
+        planets_writer=planets_writer,
+    )
     fsdlite_miner = FsdLiteMiner(resbrowser=resource_browser, translator=trans)
     fsdbuilt_miner = FsdBuiltMiner(resbrowser=resource_browser, translator=trans)
     miners = [
